@@ -3,7 +3,7 @@ layer {
   name: "data"
   type: "Input"
   top: "data"
-  input_param { shape: { dim: 1 dim: 1 dim: 1 dim: 768 } }
+  input_param { shape: { dim: 1 dim: 1 dim: 1 dim: 784 } }
 }
 layer {
   name: "ip"
