@@ -43,6 +43,8 @@ net.blobs['data'].data[...] = input_data
 # compute the convolution output by forward pass
 net.forward()
 
+print net.params['ip'][0].data.shape
+print net.params['ip'][1].data.shape
 print('Output of inner product layer')
 print net.blobs['ip'].data[0]
 
