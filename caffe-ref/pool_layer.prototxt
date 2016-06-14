@@ -1,0 +1,18 @@
+name: "Example_Pool"
+layer {
+  name: "data"
+  type: "Input"
+  top: "data"
+  input_param { shape: { dim: 1 dim: 1 dim: 28 dim: 28 } }
+}
+layer {
+  name: "pool"
+  type: "Pooling"
+  bottom: "data"
+  top: "pool"
+  pooling_param {
+    pool: MAX
+    kernel_size: 2
+    stride: 2
+  }
+}
