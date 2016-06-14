@@ -2,8 +2,10 @@ import sys, os
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+from skimage import io, exposure
 
-assert ('CAFFE_ROOT' in os.environ) , 'Please set CAFFE_ROOT in the environment variable to point to the caffe installation directory'
+assert ('CAFFE_ROOT' in os.environ) , ('Please set CAFFE_ROOT in the environment' 
+    'variable to point to the caffe installation directory')
 
 caffe_pkg_path = os.path.join(os.environ['CAFFE_ROOT'], 'python')
 sys.path.insert(0, caffe_pkg_path)
@@ -29,8 +31,6 @@ net_def = '../nets/conv_layer.prototxt'
 
 net = caffe.Net(net_def, caffe.TEST)
 
-print net.blobs['data'].data.shape
-print net.blobs['conv'].data.shape
 
 # load the image
 image = cv2.imread(img_path)
@@ -50,7 +50,11 @@ net.blobs['data'].data[...] = input_data
 # compute the convolution output by forward pass
 net.forward()
 
-print net.blobs['conv'].data[0, 0]
+# display all maps
+for n in range(net.blobs['conv'].data.shape[1]):
+    feat_map = exposure.rescale_intensity(net.blobs['conv'].data[0, n], out_range='float')
+    cv2.imshow('conv_maps', feat_map)
+    cv2.waitKey()
 
 
 
