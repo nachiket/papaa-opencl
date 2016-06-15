@@ -1,0 +1,14 @@
+name: "LeNet"
+layer {
+  name: "data"
+  type: "Input"
+  top: "data"
+  input_param { shape: { dim: 1 dim: 1 dim: 28 dim: 28 } }
+}
+layer {
+  name: "relu"
+  type: "ReLU"
+  bottom: "data"
+  top: "relu"
+}
+
