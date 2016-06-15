@@ -1,5 +1,7 @@
+import numpy as np
+import os, sys
 
-def write_conv_weights(net, layer_name, c_file_name, h_file_name):
+def dump_conv_weights(net, layer_name, c_file_name, h_file_name):
 
     conv_weights = net.params[layer_name][0].data
     conv_bias = net.params[layer_name][1].data
@@ -42,6 +44,56 @@ def write_conv_weights(net, layer_name, c_file_name, h_file_name):
     # write bias to same file
     c_file.write('const float {:s}_bias [{:s}] = {\n'.format(layer_name, def_no_outputs))
     bias = conv_bias.tolist()
+    for i, b in enumerate(bias):
+        if(i == len(bias)-1):
+            c_file.write('{:f}'.format(b))
+        else:
+            c_file.write('{:f}, '.format(b))
+    c_file.write('};\n\n')
+    
+
+    h_file.close()
+    c_file.close()
+
+
+def dump_ip_weights(net, layer_name, c_file_name, h_file_name):
+
+    ip_weights = net.params[layer_name][0].data
+    ip_bias = net.params[layer_name][1].data
+
+    h_file = open(h_file_name, 'a')
+    c_file = open(c_file_name, 'a')
+
+    def_no_inputs = layer_name.upper() + 'NO_INPUTS'
+    def_no_outputs = layer_name.upper() + 'NO_OUTPUTS'
+
+    # write # defines related to conv layer params
+    h_file.write('#define ' + def_no_inputs + '  '+str(ip_weights.shape[1])+'\n\n')
+    h_file.write('#define ' + def_no_outputs +'  '+str(ip_weights.shape[0])+'\n\n')
+
+    # extern variable weight and bias array names
+    h_file.write('extern const float {:s}_weights  [{:s}][{:s}];\n\n'.format(layer_name, def_no_outputs, def_no_inputs))
+    h_file.write('extern const float {:s}_bias[{:s}];\n\n'.format(layer_name, def_no_outputs))
+
+    # write weights to the C source file
+    c_file.write('const float {:s}_weights  [{:s}][{:s}] = {\n'.format(layer_name, def_no_outputs, def_no_inputs))
+    for f in range(ip_weights.shape[0]):
+        c_file.write('{')
+        filt = ip_weights[f].tolist()
+        for i, e in enumerate(filt):
+            if(i == len(filt)-1):
+                c_file.write('{:f}'.format(e))
+            else:
+                c_file.write('{:f}, '.format(e))
+        if(f == ip_weights.shape[0]-1):
+            c_file.write('}\n')
+        else:
+            c_file.write('},\n')
+    c_file.write('};\n\n')
+
+    # write bias to same file
+    c_file.write('const float {:s}_bias[{:s}] = {\n'.format(layer_name, def_no_outputs))
+    bias = ip_bias.tolist()
     for i, b in enumerate(bias):
         if(i == len(bias)-1):
             c_file.write('{:f}'.format(b))
