@@ -4,12 +4,63 @@ import matplotlib.pyplot as plt
 import numpy as np
 from skimage import io, exposure
 
-c_source_header = '/* Example convolution layer weights and biases*/\n#include "conv_layer_weight.h"'
-h_source_header = '/*Header file for convolution layer weights and biases*/'
+c_file_header = '/* Example convolution layer weights and biases*/\n#include "conv_layer_weight.h"\n\n'
+h_file_header = ('/*Header file for convolution layer weights and biases*/\n'
+    '#ifndef _CONV_LAYER_WEIGHT_H_\n#define _CONV_LAYER_WEIGHT_H_\n#include <stdio.h>\n\n')
 
 def write_conv_weights(net):
+    if(not os.path.isdir('./gen')):
+        os.mkdir('./gen')
+
     conv_weights = net.params['conv'][0].data
     conv_bias = net.params['conv'][1].data
+
+    h_file = open('./gen/conv_layer_weight.h', 'w')
+    c_file = open('./gen/conv_layer_weight.c', 'w')
+    h_file.write(h_file_header)
+    c_file.write(c_file_header)
+
+    # write # defines related to conv layer params
+    h_file.write('#define NO_INPUT_MAPS  '+str(conv_weights.shape[1])+'\n\n')
+    h_file.write('#define NO_OUTPUT_MAPS  '+str(conv_weights.shape[0])+'\n\n')
+    h_file.write('#define FILTER_HEIGHT  '+str(conv_weights.shape[2])+'\n\n')
+    h_file.write('#define FILTER_WIDTH  '+str(conv_weights.shape[3])+'\n\n')
+
+    # extern variable weight and bias array names
+    h_file.write('extern ' + 'const ' + 'float ' + 'conv_layer_weights' + 
+        '[NO_OUTPUT_MAPS][NO_INPUT_MAPS*FILTER_HEIGHT*FILTER_WIDTH];\n\n')
+    h_file.write('extern ' + 'const ' + 'float ' + 'conv_layer_bias' + '[NO_OUTPUT_MAPS];\n\n')
+    h_file.write('#endif // _CONV_LAYER_WEIGHT_H_')
+
+    # write weights to the C source file
+    c_file.write('const float conv_layer_weights[NO_OUTPUT_MAPS][NO_INPUT_MAPS*FILTER_HEIGHT*FILTER_WIDTH] = {\n')
+    for f in range(conv_weights.shape[0]):
+        c_file.write('{')
+        filt = conv_weights[f].reshape(-1).tolist()
+        for i, e in enumerate(filt):
+            if(i == len(filt)-1):
+                c_file.write('{:f}'.format(e))
+            else:
+                c_file.write('{:f}, '.format(e))
+        if(f == conv_weights.shape[0]-1):
+            c_file.write('}\n')
+        else:
+            c_file.write('},\n')
+    c_file.write('};\n\n')
+
+    # write bias to same file
+    c_file.write('const ' + 'float ' + 'conv_layer_bias' + '[NO_OUTPUT_MAPS] = {\n')
+    bias = conv_bias.tolist()
+    for i, b in enumerate(bias):
+        if(i == len(bias)-1):
+            c_file.write('{:f}'.format(b))
+        else:
+            c_file.write('{:f}, '.format(b))
+    c_file.write('};\n\n')
+    
+
+    h_file.close()
+    c_file.close()
     
 
 if __name__=='__main__':
@@ -66,6 +117,10 @@ if __name__=='__main__':
         feat_map = exposure.rescale_intensity(net.blobs['conv'].data[0, n], out_range='float')
         cv2.imshow('conv_maps', feat_map)
         cv2.waitKey()
+
+    # write the weights and biases to a file
+    print('The weights and biases of this layer are written in ./gen directory')
+    write_conv_weights(net)
 
 
 
