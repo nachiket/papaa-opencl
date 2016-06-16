@@ -21,19 +21,19 @@ def write_conv_weights(net):
     c_file.write(c_file_header)
 
     # write # defines related to conv layer params
-    h_file.write('#define NO_INPUT_MAPS  '+str(conv_weights.shape[1])+'\n\n')
-    h_file.write('#define NO_OUTPUT_MAPS  '+str(conv_weights.shape[0])+'\n\n')
-    h_file.write('#define FILTER_HEIGHT  '+str(conv_weights.shape[2])+'\n\n')
-    h_file.write('#define FILTER_WIDTH  '+str(conv_weights.shape[3])+'\n\n')
+    h_file.write('#define CONV1_NO_INPUTS  '+str(conv_weights.shape[1])+'\n\n')
+    h_file.write('#define CONV1_NO_OUTPUTS  '+str(conv_weights.shape[0])+'\n\n')
+    h_file.write('#define CONV1_FILTER_HEIGHT  '+str(conv_weights.shape[2])+'\n\n')
+    h_file.write('#define CONV1_FILTER_WIDTH  '+str(conv_weights.shape[3])+'\n\n')
 
     # extern variable weight and bias array names
-    h_file.write('extern ' + 'const ' + 'float ' + 'conv_layer_weights' + 
-        '[NO_OUTPUT_MAPS][NO_INPUT_MAPS*FILTER_HEIGHT*FILTER_WIDTH];\n\n')
-    h_file.write('extern ' + 'const ' + 'float ' + 'conv_layer_bias' + '[NO_OUTPUT_MAPS];\n\n')
+    h_file.write('extern ' + 'const ' + 'float ' + 'conv1_weights' + 
+        '[CONV1_NO_OUTPUTS][CONV1_NO_INPUTS*FILTER_HEIGHT*FILTER_WIDTH];\n\n')
+    h_file.write('extern ' + 'const ' + 'float ' + 'conv1_bias' + '[CONV1_NO_OUTPUTS];\n\n')
     h_file.write('#endif // _CONV_LAYER_WEIGHT_H_')
 
     # write weights to the C source file
-    c_file.write('const float conv_layer_weights[NO_OUTPUT_MAPS][NO_INPUT_MAPS*FILTER_HEIGHT*FILTER_WIDTH] = {\n')
+    c_file.write('const float conv1_weights[CONV1_NO_OUTPUTS][CONV1_NO_INPUTS*CONV1_FILTER_HEIGHT*CONV1_FILTER_WIDTH] = {\n')
     for f in range(conv_weights.shape[0]):
         c_file.write('{')
         filt = conv_weights[f].reshape(-1).tolist()
@@ -49,7 +49,7 @@ def write_conv_weights(net):
     c_file.write('};\n\n')
 
     # write bias to same file
-    c_file.write('const ' + 'float ' + 'conv_layer_bias' + '[NO_OUTPUT_MAPS] = {\n')
+    c_file.write('const ' + 'float ' + 'conv1_bias' + '[CONV1_NO_OUTPUTS] = {\n')
     bias = conv_bias.tolist()
     for i, b in enumerate(bias):
         if(i == len(bias)-1):
@@ -121,6 +121,8 @@ if __name__=='__main__':
     # write the weights and biases to a file
     print('The weights and biases of this layer are written in ./gen directory')
     write_conv_weights(net)
+    # store the caffe model
+    net.save('./gen/random_conv_model.caffemodel')
 
 
 

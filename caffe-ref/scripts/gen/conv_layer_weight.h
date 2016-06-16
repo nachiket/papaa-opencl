@@ -3,16 +3,16 @@
 #define _CONV_LAYER_WEIGHT_H_
 #include <stdio.h>
 
-#define NO_INPUT_MAPS  3
+#define CONV1_NO_INPUTS  3
 
-#define NO_OUTPUT_MAPS  5
+#define CONV1_NO_OUTPUTS  5
 
-#define FILTER_HEIGHT  5
+#define CONV1_FILTER_HEIGHT  5
 
-#define FILTER_WIDTH  5
+#define CONV1_FILTER_WIDTH  5
 
-extern const float conv_layer_weights[NO_OUTPUT_MAPS][NO_INPUT_MAPS*FILTER_HEIGHT*FILTER_WIDTH];
+extern const float conv1_weights[CONV1_NO_OUTPUTS][CONV1_NO_INPUTS*FILTER_HEIGHT*FILTER_WIDTH];
 
-extern const float conv_layer_bias[NO_OUTPUT_MAPS];
+extern const float conv1_bias[CONV1_NO_OUTPUTS];
 
 #endif // _CONV_LAYER_WEIGHT_H_

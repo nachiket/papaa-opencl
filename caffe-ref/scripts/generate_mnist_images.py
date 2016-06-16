@@ -7,7 +7,7 @@ test_imgs.X = np.reshape(test_imgs.X, (-1, 1, 28, 28))
 
 print test_imgs.X.shape 
 for im in range(10):
-    img_name = 'mnist_test_img_'+str(im)+'.jpg'
+    img_name = 'mnist_test_img_'+str(im)+'.pgm'
     print('Writing {:s}'.format(img_name))
     cv2.imwrite(img_name, 255*test_imgs.X[im, 0, :, :])
 
