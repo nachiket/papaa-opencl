@@ -28,7 +28,7 @@ def write_conv_weights(net):
 
     # extern variable weight and bias array names
     h_file.write('extern ' + 'const ' + 'float ' + 'conv1_weights' + 
-        '[CONV1_NO_OUTPUTS][CONV1_NO_INPUTS*FILTER_HEIGHT*FILTER_WIDTH];\n\n')
+        '[CONV1_NO_OUTPUTS][CONV1_NO_INPUTS*CONV1_FILTER_HEIGHT*CONV1_FILTER_WIDTH];\n\n')
     h_file.write('extern ' + 'const ' + 'float ' + 'conv1_bias' + '[CONV1_NO_OUTPUTS];\n\n')
     h_file.write('#endif // _CONV_LAYER_WEIGHT_H_')
 

@@ -11,7 +11,7 @@
 
 #define CONV1_FILTER_WIDTH  5
 
-extern const float conv1_weights[CONV1_NO_OUTPUTS][CONV1_NO_INPUTS*FILTER_HEIGHT*FILTER_WIDTH];
+extern const float conv1_weights[CONV1_NO_OUTPUTS][CONV1_NO_INPUTS*CONV1_FILTER_HEIGHT*CONV1_FILTER_WIDTH];
 
 extern const float conv1_bias[CONV1_NO_OUTPUTS];
 
