@@ -45,8 +45,8 @@ int readPGM(pgm_t* pgm, const char* filename)
     
     buf = (char*)malloc(filesize * sizeof(char));
     fseek(fp, 0, SEEK_SET);
-    bufsize = fread(buf, filesize * sizeof(char), 1, fp);
-    
+    bufsize = fread(buf, filesize * sizeof(char), 1, fp); 
+
     fclose(fp);
     
     token = (char *)STRTOK_R(buf, del, &saveptr);
@@ -69,8 +69,7 @@ int readPGM(pgm_t* pgm, const char* filename)
     token = pc + 1;
     pixs = w * h; 
    
-    pgm->buf = (unsigned char *)malloc(pixs * sizeof(unsigned char));
-    
+    pgm->buf = (unsigned char *)malloc(pixs * sizeof(unsigned char)); 
     dot = pgm->buf;
 
     for (i=0; i< pixs; i++, dot++) {

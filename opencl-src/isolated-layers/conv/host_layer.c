@@ -4,9 +4,10 @@
 #include <CL/cl.h>
 #include <CL/cl_ext.h>
 #include "papi.h"
-#include "mnist.h"
+#include "conv_layer_weight.h"
 #include "pgm.h"
 
+#define ITYPE char
 #define DTYPE float
 
 int main()
@@ -18,39 +19,45 @@ int main()
 	   int err, i =0, index =0;                            // error code returned from api calls
            pgm_t input_pgm,output_pgm;
 
-	   int ipgm_img_width = IMAGE_WIDTH;
-	   int ipgm_img_height = IMAGE_HEIGHT;
+	   int ipgm_img_width;
+	   int ipgm_img_height;
 	 
 	   cl_device_id device_id;             // compute device id 
 	   cl_context context;                 // compute context
 	   cl_command_queue commands;          // compute command queue
 	   cl_program program;                 // compute program
 	   cl_kernel kernel[3];                // compute kernel
+	   cl_uint max_compute_units;
+	   size_t max_wg_size, max_wg_dim[3];
 	
 	    // OpenCL device memory for matrices
-	   cl_mem d_image, d_filter, d_output, d_D;
+	   cl_mem d_image, d_filter, d_output, d_bias;
 
-	   //readPGM(input_pgm,"lena.pgm");
+	   readPGM(&input_pgm,"input/mnist_test_img_0.pgm");
+	   ipgm_img_width  = input_pgm.width;
+	   ipgm_img_height = input_pgm.height;
 	
 	   printf("cl:main program:img_width %d\n", ipgm_img_width);
 	   printf("cl:main program:img_height %d\n", ipgm_img_height);
  	
+	   ITYPE  *h_image;
+	   DTYPE  *h_filter, *h_bias, *h_output;
  	  //Allocate host memory for matrices
 	   unsigned int size_image = ipgm_img_width*ipgm_img_height;
-	   unsigned int mem_size_image = sizeof(DTYPE) * size_image;
-	   DTYPE* h_image = (DTYPE*) malloc(mem_size_image);
+	   unsigned int mem_size_image = sizeof(ITYPE) * size_image;
+	   h_image = (ITYPE*) input_pgm.buf;//malloc(mem_size_image * CONV1_NO_INPUTS);
 	 
-	   unsigned int size_filter = L1_KERNEL_SIZE*L1_KERNEL_SIZE;
+	   unsigned int size_filter = CONV1_FILTER_WIDTH*CONV1_FILTER_HEIGHT;
 	   unsigned int mem_size_filter = sizeof(DTYPE) * size_filter;
-	   DTYPE* h_filter = (DTYPE*) malloc(mem_size_filter);
+	   h_filter = (DTYPE*) conv1_weights;//malloc(mem_size_filter *CONV1_NO_INPUTS *CONV1_NO_OUTPUTS);
 	   
 	   unsigned int size_output = ipgm_img_width * ipgm_img_height;
 	   unsigned int mem_size_output = sizeof(DTYPE) * size_output;
-	   DTYPE* h_output = (DTYPE*) malloc(mem_size_output);
+	   h_output = (DTYPE*) malloc(mem_size_output*CONV1_NO_OUTPUTS);
 	 
-	   unsigned int size_D = (ipgm_img_width/stride) * (ipgm_img_height/stride);
-	   unsigned int mem_size_D = sizeof(DTYPE) * size_D;
-	   DTYPE* h_D = (DTYPE*) malloc(mem_size_D);
+	   unsigned int size_bias = 1; //1 bias value for 1 output map 
+	   unsigned int mem_size_bias = sizeof(DTYPE) * size_bias;
+	   h_bias = (DTYPE*) conv1_bias;//malloc(mem_size_bias * CONV1_NO_OUTPUTS);
 
 	   cl_uint dev_cnt = 0;
 	   clGetPlatformIDs(0, 0, &dev_cnt);
@@ -60,7 +67,7 @@ int main()
 	   clGetPlatformIDs(dev_cnt, platform_ids, NULL);
 	   for(i=0;i<dev_cnt;i++)
 	   {
-	    err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_GPU, 1, &device_id, NULL);
+	    err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_CPU, 1, &device_id, NULL);
 	    if(err == CL_SUCCESS)
 		break;
 	   }
@@ -77,7 +84,34 @@ int main()
 	       printf("Error: Failed to create a device group!\n");
 	       return EXIT_FAILURE;
    	    }
-  
+  	   
+	   err = clGetDeviceInfo(device_id,CL_DEVICE_MAX_COMPUTE_UNITS,sizeof(max_compute_units),&max_compute_units,NULL);
+	   if(err != CL_SUCCESS)
+	   {
+	     printf("Error: Failed to get device info! \n");
+	     return EXIT_FAILURE;
+	   }
+	   //else
+	    // printf("Max Compute Units :%d \n",max_compute_units);
+
+	   err = clGetDeviceInfo(device_id,CL_DEVICE_MAX_WORK_GROUP_SIZE,sizeof(max_wg_size),&max_wg_size,NULL);
+	   if(err != CL_SUCCESS)
+	   {
+	     printf("Error: Failed to get device info! \n");
+	     return EXIT_FAILURE;
+	   }
+	   //else
+	     //printf("Max WG size :%d \n",(int)max_wg_size);
+
+	   err = clGetDeviceInfo(device_id,CL_DEVICE_MAX_WORK_ITEM_SIZES,sizeof(max_wg_dim),&max_wg_dim,NULL);
+	   if(err != CL_SUCCESS)
+	   {
+	     printf("Error: Failed to get device info! \n");
+	     return EXIT_FAILURE;
+	   }
+	   //else
+	     //printf("Max WG dim :%d %d %d \n",(int)max_wg_dim[0],(int)max_wg_dim[1],(int)max_wg_dim[2]);
+
 	   // Create a compute context 
 	   context = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
 	   if (!context)
@@ -97,7 +131,7 @@ int main()
 	   // Create the compute program from the source file
 	   char *KernelSource;
 	   long lFileSize;
-	   lFileSize = LoadOpenCLKernel("layers.cl", &KernelSource);
+	   lFileSize = LoadOpenCLKernel("conv.cl", &KernelSource);
 	   if( lFileSize < 0L ) {
 	       perror("File read failed");
 	       return 1;
@@ -129,103 +163,72 @@ int main()
 	       printf("Error: Failed to create compute kernel!\n");
 	       exit(1);
 	   }
-#if 0
-	   kernel[1] = clCreateKernel(program, "relu", &err);
-	   if (!kernel[1] || err != CL_SUCCESS)
-	   {
-	       printf("Error: Failed to create compute kernel!\n");
-	       exit(1);
-	   }
-	   kernel[2] = clCreateKernel(program, "maxpool", &err);
-	   if (!kernel[2] || err != CL_SUCCESS)
-	   {
-	       printf("Error: Failed to create compute kernel!\n");
-	       exit(1);
-	   }
-#endif
+	   
 	   // Create the input and output arrays in device memory for our calculation
-	   d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY /*| CL_MEM_USE_MSMC_TI*/, mem_size_output, NULL, &err);
-	   d_image = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR /*| CL_MEM_USE_MSMC_TI*/, mem_size_image, h_image, &err);
-	   d_filter = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR /*| CL_MEM_USE_MSMC_TI*/, mem_size_filter, h_filter, &err);
-#if 0
-	   d_C = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_USE_MSMC_TI | CL_MEM_ALLOC_HOST_PTR, mem_size_A, NULL, &err);
-	   d_A = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_USE_MSMC_TI | CL_MEM_ALLOC_HOST_PTR, mem_size_A, NULL, &err);
-	   clEnqueueWriteBuffer(commands, d_A, CL_TRUE, 0, mem_size_A, h_A, 0, NULL, NULL);
-	   d_B = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_USE_MSMC_TI | CL_MEM_ALLOC_HOST_PTR, mem_size_B, NULL, &err);
-	   clEnqueueWriteBuffer(commands, d_B, CL_TRUE, 0, mem_size_B, h_B, 0, NULL, NULL);
-#endif
+	   d_image  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR /*| CL_MEM_USE_MSMC_TI*/, mem_size_image*CONV1_NO_INPUTS, h_image, &err);
+	   d_filter = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR /*| CL_MEM_USE_MSMC_TI*/, mem_size_filter*CONV1_NO_OUTPUTS*CONV1_NO_INPUTS, h_filter, &err);
+	   d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY /*| CL_MEM_USE_MSMC_TI*/, mem_size_output*CONV1_NO_OUTPUTS, NULL, &err);
+	   d_bias   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_bias*CONV1_NO_OUTPUTS, h_bias, &err);
 
-	   if (!d_image || !d_filter || !d_output)
+	   if (!d_image || !d_filter || !d_output || !d_bias)
 	   {
 	       printf("Error: Failed to allocate device memory!\n");
 	       exit(1);
 	   }    
    	 
 	   //Launch OpenCL kernel
-	   size_t localWorkSize[2], globalWorkSize[2];
-//	   size_t local,global;
-//	   size_t localWork[2],globalWork[2];
-	 
-	   int wA = ipgm_img_width;
-	   int wB = L1_KERNEL_SIZE;
-	   err = clSetKernelArg(kernel[0], 0, sizeof(cl_mem), (void *)&d_image);
+	   size_t localWorkSize[3], globalWorkSize[3];
+	   int filter_width  = CONV1_FILTER_WIDTH;
+	   int filter_height = CONV1_FILTER_HEIGHT;
+	   int in_maps       = CONV1_NO_INPUTS;
+
+	   err  = clSetKernelArg(kernel[0], 0, sizeof(cl_mem), (void *)&d_image);
 	   err |= clSetKernelArg(kernel[0], 1, sizeof(cl_mem), (void *)&d_filter);
 	   err |= clSetKernelArg(kernel[0], 2, sizeof(cl_mem), (void *)&d_output);
-	   err |= clSetKernelArg(kernel[0], 3, sizeof(int), (void *)&wA);
-	   err |= clSetKernelArg(kernel[0], 4, sizeof(int), (void *)&wB);
-
-//	   err |= clSetKernelArg(kernel[1], 0, sizeof(cl_mem), (void *)&d_C);
-
-//	   err |= clSetKernelArg(kernel[2], 0, sizeof(cl_mem), (void *)&d_C);
-//	   err |= clSetKernelArg(kernel[2], 1, sizeof(cl_mem), (void *)&d_D);
+	   err |= clSetKernelArg(kernel[0], 3, sizeof(int), (void *)&filter_width);
+	   err |= clSetKernelArg(kernel[0], 4, sizeof(int), (void *)&filter_height);
+	   err |= clSetKernelArg(kernel[0], 5, sizeof(int), (void *)&in_maps);
+           err |= clSetKernelArg(kernel[0], 6, sizeof(cl_mem), (void *)&d_bias);
 
 	   if (err != CL_SUCCESS)
 	   {
 	       printf("Error: Failed to set kernel arguments! %d\n", err);
        	       exit(1);
-   	  }
- 
-	   localWorkSize[0] = ipgm_img_width/4;
-	   localWorkSize[1] = ipgm_img_height/4;
+   	   }
+	   
+	   size_t pwg_size;
+	   err = clGetKernelWorkGroupInfo(kernel[0],device_id,CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,sizeof(pwg_size),&pwg_size,NULL);
+	   if(err != CL_SUCCESS)
+	   {
+		printf("Error: Failed to get Kernel Info! %d \n",err);
+		exit(1);
+	   }
+	   printf("Preferred WG size %d \n",(int)pwg_size);
+
+	   localWorkSize[0] = 7;
+	   localWorkSize[1] = 4;
+	   localWorkSize[2] = CONV1_NO_OUTPUTS;
+
 	   globalWorkSize[0] = ipgm_img_width;
 	   globalWorkSize[1] = ipgm_img_height;
+	   globalWorkSize[2] = CONV1_NO_OUTPUTS;
 	 
 	   ptimer1 = PAPI_get_virt_usec();
 	   /*Enqueue task for parallel execution*/
-	   err = clEnqueueNDRangeKernel(commands, kernel[0], 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &event);
+	   err = clEnqueueNDRangeKernel(commands, kernel[0], 3, NULL, globalWorkSize, localWorkSize, 0, NULL, &event);
 	   if (err != CL_SUCCESS)
 	   {
-	       printf("Error: Failed to execute kernel! %d\n", err);
-	       exit(1);
-	   }
-#if 0	   
-	   clFlush(commands);
-
-           local = ipgm_img_width*ipgm_img_height/8;
-           global = ipgm_img_width*ipgm_img_height;
-
-	   err = clEnqueueNDRangeKernel(commands, kernel[1], 1, NULL, &global,&local, 1, &event, &event1);	
-	   if (err != CL_SUCCESS)
-	   {
+	       if(err == CL_INVALID_WORK_ITEM_SIZE)
+		printf("CL_INVALID_WORK_ITEM_SIZE \n");
+	       if(err == CL_INVALID_WORK_GROUP_SIZE)
+		printf("CL_INVALID_WORK_GROUP_SIZE \n");
 	       printf("Error: Failed to execute kernel! %d\n", err);
 	       exit(1);
 	   }
 	   
-	   clFlush(commands);
-	   localWork[0] = ipgm_img_width/stride/4;
-	   localWork[1] = ipgm_img_height/stride/4;
-	   globalWork[0] = ipgm_img_width/stride;
-	   globalWork[1] = ipgm_img_height/stride; 
-	   err = clEnqueueNDRangeKernel(commands, kernel[2], 2, NULL, globalWork, localWork, 1, &event1, &event2);
-	   if (err != CL_SUCCESS)
-	   {
-	       printf("Error: Failed to execute kernel! %d\n", err);
-	       exit(1);
-	   }
-#endif
 	   ptimer2 = PAPI_get_virt_usec();
 	   printf("cl:main timing:PAPI clEnqueueNDRangeKernel %llu us\n",(ptimer2-ptimer1));	
-	// clWaitForEvents(1, &event2);
+	   //clWaitForEvents(1, &event2);
 	   clFinish(commands);
 	   cl_ulong time_start, time_end;
            double total_time;
@@ -246,31 +249,35 @@ int main()
 	   /* Copy to buffer - not needed */
 
 	   printf("cl:main program:completed\n"); 
- 
-	   output_pgm.width = ipgm_img_width;
-	   output_pgm.height = ipgm_img_height;
-	   normalizeF2PGM(&output_pgm, h_output);
+
+	   char fileoutputname[15];
+
+	   for(i=0;i<CONV1_NO_OUTPUTS;i++)
+	   { 
+	   	output_pgm.width = ipgm_img_width;
+	        output_pgm.height = ipgm_img_height;
+	        normalizeF2PGM(&output_pgm, (h_output+(ipgm_img_width*ipgm_img_height)));
+		sprintf(fileoutputname, "output%d.pgm",i);	
+	        /* Output image */
+		writePGM(&output_pgm,fileoutputname);
+	   }
 	
-	   /* Output image */
-	   writePGM(&output_pgm, "output.pgm");
-		
 	   destroyPGM(&input_pgm);
 	   destroyPGM(&output_pgm);
 	   
-	   free(h_image);
-	   free(h_filter);
+//	   free(h_image);
+//	   free(h_filter);
 	   free(h_output);
-	
+//	   free(h_bias);	
 	   clReleaseMemObject(d_image);
 	   clReleaseMemObject(d_filter);
 	   clReleaseMemObject(d_output);
+           clReleaseMemObject(d_bias);
 	
 	   clReleaseProgram(program);
 	   clReleaseKernel(kernel[0]);
-	   clReleaseKernel(kernel[1]);
-	   clReleaseKernel(kernel[2]);
 	   clReleaseCommandQueue(commands);
 	   clReleaseContext(context);
-	
+
 	   return 0;
 }
