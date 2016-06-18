@@ -1,6 +1,6 @@
 # Lenet5 C++ Application
 
-Execute following commands to run the app.
+Execute following commands to run the app. The app will print the predicted digit and all 10 probabilities.
 
 make all
 
