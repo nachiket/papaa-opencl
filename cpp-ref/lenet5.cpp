@@ -133,13 +133,39 @@ void InitLenet5Model(ConvLayers &conv, FcLayers &fc) {
 	
 }
 
+void customFilter2D(const Mat &input, Mat &out, const Mat &ker) {
+	
+	for(int r = 0; r < input.rows - ker.rows + 1; r++) {
+		for(int c = 0; c < input.cols - ker.cols + 1; c++) {
+			out.at<float>(r,c) = 0;
+			for(int i = 0; i < ker.rows; i++) {
+				for(int j = 0; j < ker.cols; j++) {
+					out.at<float>(r,c) += ker.at<float>(i, j) * input.at<float>(r+i, c+j);
+				}
+			}
+		}
+	}
+}
+
+void mapAdd(const Mat &map, Mat &acc) {
+	assert(map.size() == acc.size());
+	for(int r = 0; r < map.rows; r++) {
+		for(int c = 0; c < map.cols; c++) {
+			acc.at<float>(r,c) += map.at<float>(r, c);
+		}
+	}
+}
+
+
+//#define USE_OPENCV_FILTER2D
 // Simple convolution(mathematically it is correlation). Assume no padding = 0
 void convLayer(const vector<Mat> & input, vector<Mat> &output, const ConvParams &cp) {
 
+	Mat filt = Mat(input[0].rows-cp.filtH+1, input[0].cols-cp.filtW+1, CV_32F);
 	for(int n = 0 ;n < cp.noOutputs; n++) {
-		Mat filt;
 		Mat out = Mat::zeros(input[0].rows-cp.filtH+1, input[0].cols-cp.filtW+1, CV_32F);
 		for(int m = 0; m < cp.noInputs; m++) {
+#ifdef USE_OPENCV_FILTER2D
 			// 2D correlation
 			filter2D(input[m], filt, -1, cp.W[n][m], Point(-1, -1), 0, BORDER_CONSTANT);
 			// neglect the output corresponding to padded border
@@ -147,9 +173,21 @@ void convLayer(const vector<Mat> & input, vector<Mat> &output, const ConvParams 
 				cp.W[n][m].rows/2);
 			// add output from all input channels
 			add(out, filt, out);
+#else
+			customFilter2D(input[m], filt, cp.W[n][m]);
+			mapAdd(filt, out);
+#endif // USE_OPENCV_FILTER2D
 		}
 		// add bias
+#ifdef USE_OPENCV_FILTER2D
 		add(out, cp.bias[n], out);
+#else
+		for(int r = 0; r < out.rows; r++) {
+			for(int c = 0; c < out.cols; c++) {
+				out.at<float>(r,c) += cp.bias[n];
+			}
+		}
+#endif
 		// store a deep copy
 		output.push_back(out.clone());
 	}
