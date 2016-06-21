@@ -3,4 +3,4 @@ all:host_layer.c
 	./conv | more
 
 clean:host_layer.c
-	rm -rf conv
+	rm -rf conv output*
