@@ -22,6 +22,7 @@ The network is trained using Caffe and the model is stored as C file
 using namespace cv;
 using namespace std;
 
+// Structure defs to store the layer weights and bias
 typedef struct ConvWtBias {
 	vector<vector<Mat> >  W;
 	vector<float> bias;
@@ -47,6 +48,8 @@ typedef struct FcLayers {
 	vector<FcParams> layerParams;
 	int noLayers;
 } FcLayers;
+
+// Just for debugging purpose
 //--------------------------------------------------
 void printFilter(Mat f) {
 	for(int r=0; r < f.rows; r++) {
@@ -57,8 +60,10 @@ void printFilter(Mat f) {
 	}
 	cout << "-------------" << endl;
 }
+
 //--------------------------------------------------
 
+// Initialize the convolution layer parameters from the model file.
 void populateConvParams(ConvParams &cp, const float *w, const float *b) {
 
 	float k;
@@ -96,6 +101,7 @@ void populateFcParams( FcParams &fp,  const float *w, const float *b) {
 }
 //--------------------------------------------------
 
+// Initialize Lenet5 model
 void InitLenet5Model(ConvLayers &conv, FcLayers &fc) {
 
 	// Initialize conv layer parameters
@@ -133,6 +139,8 @@ void InitLenet5Model(ConvLayers &conv, FcLayers &fc) {
 	
 }
 
+//--------------------------------------------------
+// 2D filter. This is simplified version of cv::filter2D
 void customFilter2D(const Mat &input, Mat &out, const Mat &ker) {
 	
 	for(int r = 0; r < input.rows - ker.rows + 1; r++) {
@@ -147,6 +155,9 @@ void customFilter2D(const Mat &input, Mat &out, const Mat &ker) {
 	}
 }
 
+
+//--------------------------------------------------
+// Feature map accumulator. basically to perform accumulation in the 3rd dimension
 void mapAdd(const Mat &map, Mat &acc) {
 	assert(map.size() == acc.size());
 	for(int r = 0; r < map.rows; r++) {
@@ -157,6 +168,7 @@ void mapAdd(const Mat &map, Mat &acc) {
 }
 
 
+// Enable this to use cv::filter2D
 //#define USE_OPENCV_FILTER2D
 // Simple convolution(mathematically it is correlation). Assume no padding = 0
 void convLayer(const vector<Mat> & input, vector<Mat> &output, const ConvParams &cp) {
@@ -193,6 +205,9 @@ void convLayer(const vector<Mat> & input, vector<Mat> &output, const ConvParams 
 	}
 }
 
+
+//--------------------------------------------------
+// max pooling.
 void maxPoolLayer(const vector<Mat> &input, vector<Mat> &output, int winSize, int stride) {
 	int outH, outW;
 	// this is going to be output map size
@@ -222,6 +237,8 @@ void maxPoolLayer(const vector<Mat> &input, vector<Mat> &output, int winSize, in
 }
 
 
+//--------------------------------------------------
+// Rectification layer
 void reluLayer(vector<float> &input) {
 	for(int e = 0; e < input.size(); e++){
 		if(input[e] < 0.0) {
@@ -230,6 +247,9 @@ void reluLayer(vector<float> &input) {
 	}
 }
 
+
+//--------------------------------------------------
+// Fully connected layer of a neural net. 
 void innerProductLayer(const vector<float> &input, vector<float> &output, const FcParams &fp) {
 	float acc;
 	for(int n = 0; n < fp.noOutputs; n++) {
@@ -245,6 +265,10 @@ void innerProductLayer(const vector<float> &input, vector<float> &output, const 
 	}
 }
 
+
+//--------------------------------------------------
+// Variant of inner product layer whose input is set of feature maps instead of a single feature vector.
+// ie. Input is pool or conv layer
 void innerProductLayer(const vector<Mat> &input, vector<float> &output, const FcParams &fp) {
 
 	// unroll all the feature maps
@@ -259,9 +283,13 @@ void innerProductLayer(const vector<Mat> &input, vector<float> &output, const Fc
 			}
 		}
 	}
+	// It is the normal inner product once we unroll the feature maps into a feature vector.
 	innerProductLayer(inArray, output, fp);
 }
 
+
+//--------------------------------------------------
+// Softmax probability layer.
 void softmaxLayer(vector<float> &input, vector<float> &output) {
 	float sum = 0;
 	for(int n = 0; n < input.size(); n++) {
@@ -273,6 +301,9 @@ void softmaxLayer(vector<float> &input, vector<float> &output) {
 	}
 }
 
+
+//--------------------------------------------------
+// Here we call all layer APIs in sequence to get the final prediction
 int lenet5App(Mat &input, const ConvLayers &convModel, const FcLayers &fcModel) {
 	vector<Mat> inVec;
 	vector<Mat> conv1Out, conv2Out, pool1Out, pool2Out;
@@ -307,6 +338,8 @@ int lenet5App(Mat &input, const ConvLayers &convModel, const FcLayers &fcModel) 
 
 	
 }
+
+
 int main(int argc, char **argv) {
 
 	if(argc < 2) {
