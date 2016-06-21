@@ -217,8 +217,8 @@ int main()
 	           localWorkSize[1] = 2;
 //	   localWorkSize[2] = 1;
 
-	           globalWorkSize[0] = ipgm_img_width - CONV1_FILTER_WIDTH +1;
-	           globalWorkSize[1] = ipgm_img_height - CONV1_FILTER_HEIGHT +1;
+	           globalWorkSize[0] = ipgm_img_width;// - CONV1_FILTER_WIDTH +1;
+	           globalWorkSize[1] = ipgm_img_height;// - CONV1_FILTER_HEIGHT +1;
 //	   globalWorkSize[2] = CONV1_NO_OUTPUTS;
 	 
 	            ptimer1 = PAPI_get_virt_usec();
@@ -242,6 +242,10 @@ int main()
 	                  printf("Error: Failed to read output array! %d\n", err);
 	                  exit(1);
 	             }
+
+	   	     clReleaseMemObject(d_filter);
+	             clReleaseMemObject(d_output);
+                     clReleaseMemObject(d_bias);
 
 	             char fileoutputname[15];
                      output_pgm.width = ipgm_img_width;
@@ -309,9 +313,9 @@ int main()
 	   free(h_output);
 //	   free(h_bias);	
 	   clReleaseMemObject(d_image);
-	   clReleaseMemObject(d_filter);
-	   clReleaseMemObject(d_output);
-           clReleaseMemObject(d_bias);
+//	   clReleaseMemObject(d_filter);
+//	   clReleaseMemObject(d_output);
+//         clReleaseMemObject(d_bias);
 	
 	   clReleaseProgram(program);
 	   clReleaseKernel(kernel[0]);

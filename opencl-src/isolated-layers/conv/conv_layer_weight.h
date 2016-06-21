@@ -3,7 +3,7 @@
 #define _CONV_LAYER_WEIGHT_H_
 #include <stdio.h>
 
-#define CONV1_NO_INPUTS  1
+#define CONV1_NO_INPUTS 1
 
 #define CONV1_NO_OUTPUTS  5
 
