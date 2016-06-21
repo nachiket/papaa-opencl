@@ -91,7 +91,6 @@ int writePGM(pgm_t* pgm, const char* filename)
     w = pgm->width;
     h = pgm->height;
     pixs = w * h;
-
     if ((fp = fopen(filename, "wb+")) ==NULL) {
         fprintf(stderr, "Failed to open file\n");
         return -1;
@@ -149,8 +148,8 @@ int normalizeF2PGM(pgm_t* pgm, float* x)
     w = pgm->width;
     h = pgm->height;
   
-    pgm->buf = (unsigned char*)malloc(w * h * sizeof(unsigned char));
-       
+    pgm->buf = (unsigned char*)malloc(w * h * sizeof(unsigned char));   
+    //printf("%d %d %d \n",pgm->width,pgm->height,w * h * sizeof(unsigned char));
     float min = 0;
     float max = 0;
     for (i=0; i<h; i++) {
