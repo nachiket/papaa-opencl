@@ -93,7 +93,7 @@ if __name__=='__main__':
     
     
     # load the image
-    image = cv2.imread(img_path)
+    image = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
     
     if(image.ndim == 2):   # gray scale image
         input_data = image[np.newaxis, np.newaxis, :, :]
