@@ -74,7 +74,7 @@ int main()
 	   clGetPlatformIDs(dev_cnt, platform_ids, NULL);
 	   for(i=0;i<dev_cnt;i++)
 	   {
-	    err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_GPU, 1, &device_id, NULL);
+	    err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_CPU, 1, &device_id, NULL);
 	    if(err == CL_SUCCESS)
 		break;
 	   }
@@ -164,7 +164,7 @@ int main()
 	       exit(1);
 	   }
 	
-	   kernel[0] = clCreateKernel(program, "filter2D", &err);
+	   kernel[0] = clCreateKernel(program, "filter2D_unroll", &err);
 	   if (!kernel[0] || err != CL_SUCCESS)
 	   {
 	       printf("Error: Failed to create compute kernel!\n");
@@ -175,9 +175,9 @@ int main()
    	   for(i=0;i<CONV1_NO_OUTPUTS;i++)
 	   {
 		   // Create the input and output arrays in device memory for our calculation
-		   d_filter = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR /*| CL_MEM_USE_MSMC_TI*/, mem_size_filter*CONV1_NO_INPUTS, h_filter+(i*mem_size_filter*CONV1_NO_INPUTS), &err);
+		   d_filter = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR /*| CL_MEM_USE_MSMC_TI*/, mem_size_filter*CONV1_NO_INPUTS, h_filter+(i*CONV1_NO_INPUTS*CONV1_FILTER_WIDTH*CONV1_FILTER_HEIGHT), &err);
 		   d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY /*| CL_MEM_USE_MSMC_TI*/, mem_size_output, NULL, &err);
-		   d_bias   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_bias, h_bias+(i*mem_size_bias), &err);
+		   d_bias   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_bias, h_bias+i, &err);
 
 		   if (!d_image || !d_filter || !d_output || !d_bias)
 		   {
@@ -220,7 +220,6 @@ int main()
 	                 printf("Error: Failed to execute kernel! %d\n", err);
 	                 exit(1);
 	             }
-		     clFinish(commands);
 	   	     /*Retrieve result from device*/
 
                      err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_output, h_output, 0, NULL, NULL);
@@ -243,7 +242,7 @@ int main()
 		     writePGM(&output_pgm,fileoutputname);
 	   }
 	   ptimer2 = PAPI_get_virt_usec();
-	   printf("cl:main timing:PAPI clEnqueueNDRangeKernel %llu us\n",(ptimer2-ptimer1));	
+	   printf("cl:main timing:PAPI clEnqueueNDRangeKernel %llu us\n",(ptimer2-ptimer1));
 	   //clWaitForEvents(1, &event2);
 	   clFinish(commands);
 	   cl_ulong time_start, time_end;

@@ -11,12 +11,7 @@ __kernel void filter2D(
 	const int y = get_global_id(1);
         const int ImWidth  = get_global_size(0);
         const int ImHeight = get_global_size(1);
-	if((x==0)&&(y==0))
-	{
-	 for(int i=0;i<(nInMaps*nFilterHeight*nFilterWidth);i++)
-	 printf("%f    ",pFilter[i]);
-	 printf("\n");
-	}
+	
 	float sum = 0;
 	int c = 0;
 	for(int maps = 0; maps<nInMaps; maps++)
