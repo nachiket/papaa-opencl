@@ -4,7 +4,7 @@
 #include <CL/cl.h>
 #include <CL/cl_ext.h>
 #include "papi.h"
-#include "conv_layer_weight.h"
+#include "../../../caffe-ref/scripts/gen/lenet5_model.h"
 #include "pgm.h"
 
 #define ITYPE char
