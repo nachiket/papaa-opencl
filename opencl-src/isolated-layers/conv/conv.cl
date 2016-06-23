@@ -9,16 +9,46 @@ __kernel void filter2D(
 {
 	const int x = get_global_id(0); 
 	const int y = get_global_id(1);
+	const int z = get_global_id(2);
+
         const int ImWidth  = get_global_size(0);
         const int ImHeight = get_global_size(1);
 	
 	float sum = 0;
 	int c = 0;
+	int idxFtmp = z*nFilterHeight*nFilterWidth*nInMaps;
+/*
+	if((get_global_id(0)==0) && (get_global_id(1)==0) && (get_global_id(2)==0))
+	 printf("%d %d %d \n", get_num_groups(0),get_num_groups(1),get_num_groups(2));
+
+	if((get_global_id(0)==0) && (get_global_id(1)==0) && (get_global_id(2)==18))
+	{
+	  for(int i=0;i<28*28;i++)
+		printf("%f,",pInput[i]);
+	  printf("---------->>>>>>>------\n\n\n");
+	}
+
+	if((get_global_id(0)==0) &&( get_global_id(1)==0) && (get_global_id(2)==0))
+	{
+	 for(int j =0; j < 20; j++)
+	 {
+	   for(int i=0; i<nInMaps*nFilterHeight*nFilterWidth; i++)
+	   {
+		printf("%f,",pFilter[j*nFilterHeight*nFilterWidth*nInMaps+i]);
+	   }
+	   printf("\n");
+	 }
+	 printf("\n \n \n");
+	 for(int j=0;j<20;j++)
+	  printf("%f",pBias[j]);
+	printf("\n");
+	}
+*/
 	for(int maps = 0; maps<nInMaps; maps++)
 	{ 
 		for (int r = 0; r <nFilterHeight; r++) 
 		{ 
-			const int idxFtmp = (maps*nFilterHeight + r) * nFilterWidth; 
+			idxFtmp = idxFtmp + (maps*nFilterHeight + r) * nFilterWidth; 
 			const int idxIntmp = (((maps*ImHeight) + y + r) * ImWidth) + x;
 			for(c = 0; c <nFilterWidth; c++)
 			{
@@ -28,7 +58,8 @@ __kernel void filter2D(
 			}
 		}
 	}
-	pOutput[(y*ImWidth)+x] = sum + *pBias;
+	pOutput[((z*ImHeight*ImWidth)+(y*ImWidth)+x)] = pInput[((z*0+ y)*ImWidth)+x];//sum + pBias[z];
+	printf("%d %d %d %d \n",x,y,z,((z*ImHeight*ImWidth)+(y*ImWidth)+x));
 }
 
 
