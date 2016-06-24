@@ -51,7 +51,6 @@ int main()
 	   for(i=0;i<size_image;i++)
 	   {
 	   	h_image[(i+(j*size_image))] = (DTYPE) input_pgm.buf[i]/255;
-		printf("%f,",h_image[(i+(j*size_image))]);
 	   }
 	   }
 	
@@ -165,7 +164,7 @@ int main()
 	       exit(1);
 	   }
 	
-	   kernel[0] = clCreateKernel(program, "filter2D", &err);
+	   kernel[0] = clCreateKernel(program, "filter3D", &err);
 	   if (!kernel[0] || err != CL_SUCCESS)
 	   {
 	       printf("Error: Failed to create compute kernel!\n");
@@ -234,7 +233,7 @@ int main()
 
 	    /*Retrieve result from device*/
 
-            err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_output, h_output, 0, NULL, NULL);
+            err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_output*CONV1_NO_OUTPUTS, h_output, 0, NULL, NULL);
             if (err != CL_SUCCESS)
 	    {
 	         printf("Error: Failed to read output array! %d\n", err);

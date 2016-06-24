@@ -1,4 +1,4 @@
-__kernel void filter2D(
+__kernel void filter3D(
 	const __global float * pInput, 
 	__constant float * pFilter, 
 	__global float * pOutput, 
@@ -16,7 +16,7 @@ __kernel void filter2D(
 	
 	float sum = 0;
 	int c = 0;
-	int idxFtmp = z*nFilterHeight*nFilterWidth*nInMaps;
+	int idxFstart = z*nFilterHeight*nFilterWidth*nInMaps;
 /*
 	if((get_global_id(0)==0) && (get_global_id(1)==0) && (get_global_id(2)==0))
 	 printf("%d %d %d \n", get_num_groups(0),get_num_groups(1),get_num_groups(2));
@@ -43,12 +43,13 @@ __kernel void filter2D(
 	  printf("%f",pBias[j]);
 	printf("\n");
 	}
+	//printf("%d %d %d %p \n",x,y,z, &pOutput[((z*ImHeight*ImWidth)+(y*ImWidth)+x)]);
 */
 	for(int maps = 0; maps<nInMaps; maps++)
 	{ 
 		for (int r = 0; r <nFilterHeight; r++) 
 		{ 
-			idxFtmp = idxFtmp + (maps*nFilterHeight + r) * nFilterWidth; 
+			const int idxFtmp = idxFstart + (maps*nFilterHeight + r) * nFilterWidth; 
 			const int idxIntmp = (((maps*ImHeight) + y + r) * ImWidth) + x;
 			for(c = 0; c <nFilterWidth; c++)
 			{
@@ -58,12 +59,11 @@ __kernel void filter2D(
 			}
 		}
 	}
-	pOutput[((z*ImHeight*ImWidth)+(y*ImWidth)+x)] = pInput[((z*0+ y)*ImWidth)+x];//sum + pBias[z];
-	printf("%d %d %d %d \n",x,y,z,((z*ImHeight*ImWidth)+(y*ImWidth)+x));
+	pOutput[((z*ImHeight*ImWidth)+(y*ImWidth)+x)] = sum + pBias[z];
 }
 
 
-__kernel void filter2D_unroll(
+__kernel void filter3D_unroll(
         const __global float * pInput,
         __constant float * pFilter,
         __global float * pOutput,
@@ -74,15 +74,21 @@ __kernel void filter2D_unroll(
 {
         const int x = get_global_id(0); 
         const int y = get_global_id(1);
+	const int z = get_global_id(2);
+
         const int ImWidth  = get_global_size(0);
         const int ImHeight = get_global_size(1);
+
         float sum = 0;
         int c = 0;
+
+	int idxFtmp = z*nFilterHeight*nFilterWidth*nInMaps;
+
         for(int maps = 0; maps<nInMaps; maps++)
         {
              for (int r = 0; r <nFilterHeight; r++) 
              {
-                int idxF = ((maps*nFilterHeight + r) * nFilterWidth) + c; 
+                int idxF = idxFtmp + ((maps*nFilterHeight + r) * nFilterWidth) + c; 
                 int idxIn = ((((maps*ImHeight) + y + r) * ImWidth) + x) + c;
                 sum += pFilter[idxF]*pInput[idxIn]; 
                 idxF++; 
