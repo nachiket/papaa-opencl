@@ -7,8 +7,7 @@
 #include "../../../caffe-ref/scripts/gen/lenet5_model.h"
 #include "pgm.h"
 
-#define ITYPE char
-#define DTYPE float
+typedef float DTYPE;
 
 int main()
 {
@@ -138,7 +137,7 @@ int main()
 	   // Create the compute program from the source file
 	   char *KernelSource;
 	   long lFileSize;
-	   lFileSize = LoadOpenCLKernel("conv.cl", &KernelSource);
+	   lFileSize = LoadOpenCLKernel("kernels.cl", &KernelSource);
 	   if( lFileSize < 0L ) {
 	       perror("File read failed");
 	       return 1;
@@ -257,7 +256,7 @@ int main()
 	    for(i=0;i<CONV1_NO_OUTPUTS;i++)
             {
 	    	 normalizeF2PGM(&output_pgm, (h_output+(i*ipgm_img_width*ipgm_img_height)));
-	    	 sprintf(fileoutputname, "output%d.pgm",i);	
+	    	 sprintf(fileoutputname, "output3d%d.pgm",i);	
 	    	 /* Output image */
 	    	 writePGM(&output_pgm,fileoutputname);
 	    }

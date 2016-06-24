@@ -7,8 +7,7 @@
 #include "../../../caffe-ref/scripts/gen/lenet5_model.h"
 #include "pgm.h"
 
-#define ITYPE char
-#define DTYPE float
+typedef float DTYPE;
 
 int main()
 {
@@ -33,7 +32,7 @@ int main()
 	    // OpenCL device memory for matrices
 	   cl_mem d_image, d_filter, d_output, d_bias;
 
-	   readPGM(&input_pgm,"input/lena.pgm");
+	   readPGM(&input_pgm,"input/mnist_test_img_0.pgm");
 	   ipgm_img_width  = input_pgm.width;
 	   ipgm_img_height = input_pgm.height;
 	
@@ -138,7 +137,7 @@ int main()
 	   // Create the compute program from the source file
 	   char *KernelSource;
 	   long lFileSize;
-	   lFileSize = LoadOpenCLKernel("conv.cl", &KernelSource);
+	   lFileSize = LoadOpenCLKernel("kernels.cl", &KernelSource);
 	   if( lFileSize < 0L ) {
 	       perror("File read failed");
 	       return 1;
@@ -172,7 +171,11 @@ int main()
 	   }
 
 	   d_image  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR /*| CL_MEM_USE_MSMC_TI*/, mem_size_image*CONV1_NO_INPUTS, h_image, &err);
-   	   for(i=0;i<CONV1_NO_OUTPUTS;i++)
+ 
+	   cl_ulong time_start, time_end;
+           double total_time,itime;
+	   ptimer1 = PAPI_get_virt_usec();
+	   for(i=0;i<CONV1_NO_OUTPUTS;i++)
 	   {
 		   // Create the input and output arrays in device memory for our calculation
 		   d_filter = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR /*| CL_MEM_USE_MSMC_TI*/, mem_size_filter*CONV1_NO_INPUTS, h_filter+(i*CONV1_NO_INPUTS*CONV1_FILTER_WIDTH*CONV1_FILTER_HEIGHT), &err);
@@ -185,7 +188,7 @@ int main()
 		       exit(1);
 		   }    
 		   	//Launch OpenCL kernel
-		   size_t localWorkSize[3], globalWorkSize[3];
+		   size_t localWorkSize[2], globalWorkSize[2];
 		   int filter_width  = CONV1_FILTER_WIDTH;
 		   int filter_height = CONV1_FILTER_HEIGHT;
 		   int in_maps       = CONV1_NO_INPUTS;
@@ -208,7 +211,6 @@ int main()
 	           globalWorkSize[0] = ipgm_img_width;
 	           globalWorkSize[1] = ipgm_img_height;
 	 
-	            ptimer1 = PAPI_get_virt_usec();
 	            /*Enqueue task for parallel execution*/
 	            err = clEnqueueNDRangeKernel(commands, kernel[0], 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &event);
 	            if (err != CL_SUCCESS)
@@ -220,8 +222,12 @@ int main()
 	                 printf("Error: Failed to execute kernel! %d\n", err);
 	                 exit(1);
 	             }
+		     clWaitForEvents(1,&event);
+                     clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
+	             clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
+	             itime = (double)(time_end - time_start);
+                     total_time += itime;
 	   	     /*Retrieve result from device*/
-
                      err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_output, h_output, 0, NULL, NULL);
                      if (err != CL_SUCCESS)
 	             {
@@ -237,19 +243,12 @@ int main()
                      output_pgm.width = ipgm_img_width;
 	             output_pgm.height = ipgm_img_height;
 	             normalizeF2PGM(&output_pgm, h_output);
-		     sprintf(fileoutputname, "output%d.pgm",i);	
+		     sprintf(fileoutputname, "output2d%d.pgm",i);	
 	             /* Output image */
 		     writePGM(&output_pgm,fileoutputname);
 	   }
 	   ptimer2 = PAPI_get_virt_usec();
 	   printf("cl:main timing:PAPI clEnqueueNDRangeKernel %llu us\n",(ptimer2-ptimer1));
-	   //clWaitForEvents(1, &event2);
-	   clFinish(commands);
-	   cl_ulong time_start, time_end;
-           double total_time;
-	   clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
-	   clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
-	   total_time = time_end - time_start;
 	   printf("cl:main timing:opencl clEnqueueNDRangeKernel %0.3f us\n", total_time / 1000.0);
 
 	   destroyPGM(&input_pgm);
