@@ -12,14 +12,14 @@ typedef float DTYPE;
 int main()
 {
 	   cl_event event,event1,event2;
-	   int j =0,stride=2;
+	   int Hstride=2,Vstride=2;
 	   register long long ptimer1=0;
 	   register long long ptimer2=0;
-	   int err, i =0, index =0;                            // error code returned from api calls
+	   int err, i =0,j=0, index =0;                            // error code returned from api calls
            pgm_t input_pgm,output_pgm;
 
-	   int ipgm_img_width;
-	   int ipgm_img_height;
+	   int ipgm_img_width, opgm_img_width;
+	   int ipgm_img_height, opgm_img_height;
 	 
 	   cl_device_id device_id;             // compute device id 
 	   cl_context context;                 // compute context
@@ -31,40 +31,41 @@ int main()
 	
 	    // OpenCL device memory for matrices
 	   cl_mem d_image, d_filter, d_output, d_bias;
+	
+	   
+	   DTYPE  *h_image;
+	   DTYPE  *h_filter, *h_bias, *h_output;
 
-	   readPGM(&input_pgm,"../../input/mnist_test_img_0.pgm");
-	   ipgm_img_width  = input_pgm.width;
-	   ipgm_img_height = input_pgm.height;
+	   readPGM(&input_pgm,"output3d0.pgm");
+	   ipgm_img_width  = input_pgm.width-CONV1_FILTER_WIDTH+1;
+	   ipgm_img_height = input_pgm.height-CONV1_FILTER_HEIGHT+1;
+	   opgm_img_width  = ipgm_img_width/Hstride;
+	   opgm_img_height = ipgm_img_height/Vstride;
 	
 	   printf("cl:main program:img_width %d\n", ipgm_img_width);
 	   printf("cl:main program:img_height %d\n", ipgm_img_height);
- 	
-	   DTYPE  *h_image;
-	   DTYPE  *h_filter, *h_bias, *h_output;
  	  //Allocate host memory for matrices
 	   unsigned int size_image = ipgm_img_width*ipgm_img_height;
 	   unsigned int mem_size_image = sizeof(DTYPE) * size_image;
-           h_image    = (DTYPE*)malloc(mem_size_image * CONV1_NO_INPUTS);
-	   for(j=0;j<CONV1_NO_INPUTS;j++)
+           h_image    = (DTYPE*)malloc(mem_size_image * CONV1_NO_OUTPUTS);
+	   char* filenameinput[15];
+	   for(j=0;j<CONV1_NO_OUPUTS;j++)
 	   {
-	   for(i=0;i<size_image;i++)
-	   {
-	   	h_image[(i+(j*size_image))] = (DTYPE) input_pgm.buf[i]/255;
-	   }
+	       sprintf(filenameinput, "output3d%d.pgm",i);	
+	       readPGM(&input_pgm,filenameinput);	
+	       for(i=0;i<ipgm_img_height;i++)
+	       {
+		 for(l=0;l<ipgm_img_width;l++)
+		 {
+	        	h_image[(i*ipgm_img_width)+(j*ipgm_img_width*ipgm_img_height)+l] = (DTYPE) input_pgm.buf[((i*ipgm_img_width)+l)]/255;
+	         }
+	       }
 	   }
 	
-	   unsigned int size_filter = CONV1_FILTER_WIDTH*CONV1_FILTER_HEIGHT;
-	   unsigned int mem_size_filter = sizeof(DTYPE) * size_filter;
-	   h_filter = (DTYPE*) conv1_weights;
-	   
-	   unsigned int size_output = ipgm_img_width * ipgm_img_height;
+	   unsigned int size_output = opgm_img_width * opgm_img_height;
 	   unsigned int mem_size_output = sizeof(DTYPE) * size_output;
 	   h_output = (DTYPE*) malloc(mem_size_output*CONV1_NO_OUTPUTS);
 	 
-	   unsigned int size_bias = 1; //1 bias value for 1 output map 
-	   unsigned int mem_size_bias = sizeof(DTYPE) * size_bias;
-	   h_bias = (DTYPE*) conv1_bias;
-
 	   cl_uint dev_cnt = 0;
 	   clGetPlatformIDs(0, 0, &dev_cnt);
 		
@@ -163,7 +164,7 @@ int main()
 	       exit(1);
 	   }
 	
-	   kernel[0] = clCreateKernel(program, "filter3D", &err);
+	   kernel[0] = clCreateKernel(program, "maxpool3D", &err);
 	   if (!kernel[0] || err != CL_SUCCESS)
 	   {
 	       printf("Error: Failed to create compute kernel!\n");
@@ -171,21 +172,19 @@ int main()
 	   }
 
  	   // Create the input and output arrays in device memory for our calculation
-       	   d_image  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR /*| CL_MEM_USE_MSMC_TI*/, mem_size_image*CONV1_NO_INPUTS, h_image, &err);
-       	   d_filter = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR /*| CL_MEM_USE_MSMC_TI*/, mem_size_filter*CONV1_NO_INPUTS*CONV1_NO_OUTPUTS, h_filter, &err);
+       	   d_image  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR /*| CL_MEM_USE_MSMC_TI*/, mem_size_image*CONV1_NO_OUTPUTS, h_image, &err);
        	   d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY /*| CL_MEM_USE_MSMC_TI*/, mem_size_output*CONV1_NO_OUTPUTS, NULL, &err);
-       	   d_bias   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_bias*CONV1_NO_OUTPUTS, h_bias, &err);
        
-       	   if (!d_image || !d_filter || !d_output || !d_bias)
+       	   if (!d_image || !d_output)
        	   {
        	      printf("Error: Failed to allocate device memory!\n");
        	      exit(1);
        	   }    
        	  	//Launch OpenCL kernel
        	   size_t localWorkSize[3], globalWorkSize[3];
-       	   int filter_width  = CONV1_FILTER_WIDTH;
-       	   int filter_height = CONV1_FILTER_HEIGHT;
-       	   int in_maps       = CONV1_NO_INPUTS;
+       	   int filter_width  = Hstride;
+       	   int filter_height = Vstride;
+       	   int in_maps       = CONV1_NO_OUTPUTS;
        
        	   err  = clSetKernelArg(kernel[0], 0, sizeof(cl_mem), (void *)&d_image);
        	   err |= clSetKernelArg(kernel[0], 1, sizeof(cl_mem), (void *)&d_filter);
@@ -203,8 +202,8 @@ int main()
        	   localWorkSize[1] = 2;
        	   localWorkSize[2] = 1;
        
-       	   globalWorkSize[0] = ipgm_img_width;
-       	   globalWorkSize[1] = ipgm_img_height;
+       	   globalWorkSize[0] = opgm_img_width;
+       	   globalWorkSize[1] = opgm_img_height;
        	   globalWorkSize[2] = CONV1_NO_OUTPUTS;
        	
        	   ptimer1 = PAPI_get_virt_usec();
@@ -221,7 +220,6 @@ int main()
 	    }
 	    ptimer2 = PAPI_get_virt_usec();
 	    printf("cl:main timing:PAPI clEnqueueNDRangeKernel %llu us\n",(ptimer2-ptimer1));
-	    //clWaitForEvents(1, &event2);
 	    clFinish(commands);
 	    cl_ulong time_start, time_end;
             double total_time;

@@ -1,34 +1,30 @@
 __kernel void maxpool3D(
 	const __global float * pInput, 
 	__global float * pOutput, 
-	const int Width,
-	const int Height,
+	const int PoolWidth,
+	const int PoolHeight,
+	const int ImWidth,
+	const int ImHeight,
+	const int nMaps
 	const int Hstride,
-	const int Vstride,
-	const int nMaps)
+	const int Vstride)
 {
 	const int x = get_global_id(0); 
 	const int y = get_global_id(1);
-        const int ImWidth  = get_global_size(0);
-        const int ImHeight = get_global_size(1);
-	
-	float sum = 0;
-	int c = 0;
-	for(int maps = 0; maps<nInMaps; maps++)
+	const int z = get_global_id(2);
+	const int xidx = Hstride*x;
+	const int yidx = Vstride*y;
+	float maxval =0.0;
+	for (int r = 0; r <PoolHeight; r++) 
 	{ 
-		for (int r = 0; r <nFilterHeight; r++) 
-		{ 
-			const int idxFtmp = (maps*nFilterHeight + r) * nFilterWidth; 
-			const int idxIntmp = (((maps*ImHeight) + y + r) * ImWidth) + x;
-			for(c = 0; c <nFilterWidth; c++)
-			{
-				const int idxF = idxFtmp + c;
-				const int idxIn = idxIntmp + c;
-				sum += pFilter[idxF]*pInput[idxIn];
-			}
+		const int idxIntmp = (((z*ImHeight) + yidx + r) * ImWidth) + xidx;
+		for(int c = 0; c <PoolWidth; c++)
+		{
+			const int idxIn = idxIntmp + c;
+			maxval = fmax(maxval,pInput[idxIn]); 
 		}
 	}
-	pOutput[(y*ImWidth)+x] = sum + *pBias;
+	pOutput[(((z*nImHeight)+y)*ImWidth)+x] = maxval;
 }
 
 
