@@ -315,12 +315,11 @@ int lenet5App(Mat &input, const ConvLayers &convModel, const FcLayers &fcModel) 
 	convLayer(inVec, conv1Out, convModel.layerParams[0]);
 	// pool layer 1
 	maxPoolLayer(conv1Out, pool1Out, 2, 2);
-	printFilter(pool1Out[0]);
 	// conv layer 2
 	convLayer(pool1Out, conv2Out, convModel.layerParams[1]);
 	// pool layer 2
 	maxPoolLayer(conv2Out, pool2Out, 2, 2);
-
+	printFilter(pool2Out[0]);
 	// inner product 1
 	innerProductLayer(pool2Out, ip1Out, fcModel.layerParams[0]);
 	// ReLU layer
