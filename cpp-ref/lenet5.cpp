@@ -54,7 +54,8 @@ typedef struct FcLayers {
 void printFilter(Mat f) {
 	for(int r=0; r < f.rows; r++) {
 		for(int c=0; c<f.cols; c++) {
-			cout << f.at<float>(r,c) << ",";
+			//cout << f.at<float>(r,c) << ",";
+			printf("%1.2f,",f.at<float>(r,c));
 		}
 		cout << endl;
 	}
@@ -312,6 +313,7 @@ int lenet5App(Mat &input, const ConvLayers &convModel, const FcLayers &fcModel) 
 	inVec.push_back(input);
 	// conv layer 1
 	convLayer(inVec, conv1Out, convModel.layerParams[0]);
+	printFilter(conv1Out[0]);
 	// pool layer 1
 	maxPoolLayer(conv1Out, pool1Out, 2, 2);
 	// conv layer 2

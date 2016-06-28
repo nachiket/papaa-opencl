@@ -246,17 +246,20 @@ int main()
 	         printf("Error: Failed to read output array! %d\n", err);
 	         exit(1);
 	    }
-/*
+
 	    {
-		long k,l;
-		for(l=0;l<CONV1_NO_OUTPUTS;l++)
+		long k,m;
+		for(m=0;m<opgm_img_height;m++)
 		{
-		    for(k=0;k<ipgm_img_width*ipgm_img_height;k++)
-			printf("%f,",h_output[(l*ipgm_img_width*ipgm_img_height)+k]);
-	  	    printf("\n\n\n\n");
+		    for(k=0;k<opgm_img_width;k++)
+		    {
+			printf("%f,",h_output[(opgm_img_width*m)+k]);
+		    }
+		    printf("\n");
 		}
+		printf("\n");
 	    }
-*/
+
 	    char fileoutputname[15];
             output_pgm.width = opgm_img_width;
 	    output_pgm.height = opgm_img_height;

@@ -20,7 +20,9 @@ int main()
 
 	   int ipgm_img_width;
 	   int ipgm_img_height;
-	 
+	   int opgm_img_width;
+	   int opgm_img_height;
+
 	   cl_device_id device_id;             // compute device id 
 	   cl_context context;                 // compute context
 	   cl_command_queue commands;          // compute command queue
@@ -39,6 +41,12 @@ int main()
 	   printf("cl:main program:img_width %d\n", ipgm_img_width);
 	   printf("cl:main program:img_height %d\n", ipgm_img_height);
  	
+	   opgm_img_width    = ipgm_img_width-CONV1_FILTER_WIDTH+1;
+	   opgm_img_height   = ipgm_img_height-CONV1_FILTER_HEIGHT+1;
+
+	   printf("cl:main program:output width %d\n", opgm_img_width);
+	   printf("cl:main program:output height %d\n", opgm_img_height);
+	   
 	   DTYPE  *h_image;
 	   DTYPE  *h_filter, *h_bias, *h_output;
  	  //Allocate host memory for matrices
@@ -222,54 +230,56 @@ int main()
 	        	printf("CL_INVALID_WORK_GROUP_SIZE \n");
 	        printf("Error: Failed to execute kernel! %d\n", err);
 	        exit(1);
-	    }
-	    ptimer2 = PAPI_get_virt_usec();
-	    printf("cl:main timing:PAPI clEnqueueNDRangeKernel %llu us\n",(ptimer2-ptimer1));
-	    //clWaitForEvents(1, &event2);
-	    clFinish(commands);
-	    cl_ulong time_start, time_end;
-            double total_time;
-	    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
-	    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
-	    total_time = time_end - time_start;
-            printf("cl:main timing:opencl clEnqueueNDRangeKernel %0.3f us\n", total_time / 1000.0);
+	   }
+	   ptimer2 = PAPI_get_virt_usec();
+	   printf("cl:main timing:PAPI clEnqueueNDRangeKernel %llu us\n",(ptimer2-ptimer1));
+	   //clWaitForEvents(1, &event2);
+	   clFinish(commands);
+	   cl_ulong time_start, time_end;
+           double total_time;
+	   clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
+	   clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
+	   total_time = time_end - time_start;
+           printf("cl:main timing:opencl clEnqueueNDRangeKernel %0.3f us\n", total_time / 1000.0);
 
-	    /*Retrieve result from device*/
+	   /*Retrieve result from device*/
 
-            err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_output*CONV1_NO_OUTPUTS, h_output, 0, NULL, NULL);
-            if (err != CL_SUCCESS)
-	    {
-	         printf("Error: Failed to read output array! %d\n", err);
-	         exit(1);
-	    }
-/*
-	    {
-		long k,l;
-		for(l=0;l<CONV1_NO_OUTPUTS;l++)
-		{
-		    for(k=0;k<ipgm_img_width*ipgm_img_height;k++)
-			printf("%f,",h_output[(l*ipgm_img_width*ipgm_img_height)+k]);
-	  	    printf("\n\n\n\n");
-		}
-	    }
-*/
-	    char fileoutputname[15];
-            output_pgm.width = ipgm_img_width;
-	    output_pgm.height = ipgm_img_height;
+           err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_output*CONV1_NO_OUTPUTS, h_output, 0, NULL, NULL);
+           if (err != CL_SUCCESS)
+	   {
+	        printf("Error: Failed to read output array! %d\n", err);
+	        exit(1);
+	   }
 
-	    for(i=0;i<CONV1_NO_OUTPUTS;i++)
-            {
-	    	 normalizeF2PGM(&output_pgm, (h_output+(i*ipgm_img_width*ipgm_img_height)));
-	    	 sprintf(fileoutputname, "output3d%d.pgm",i);	
-	    	 /* Output image */
-	    	 writePGM(&output_pgm,fileoutputname);
-	    }
+	   char fileoutputname[15];
+           long k,m;
+ 
+	   DTYPE* temp = (DTYPE*) malloc(opgm_img_width*opgm_img_height*sizeof(DTYPE));
+           output_pgm.width  = opgm_img_width;
+	   output_pgm.height = opgm_img_height;
+ 
+	   for(i=0;i<CONV1_NO_OUTPUTS;i++)
+           {
+	      for(m=0;m<opgm_img_height;m++)
+	      {
+//		for(k=0;k<opgm_img_width;k++)
+//		{
+//			temp[m*opgm_img_width + k] = h_output[i*ipgm_img_height*ipgm_img_width + m*ipgm_img_width + k];
+//		}
+		memcpy(temp+(m*opgm_img_width),h_output+(i*ipgm_img_height*ipgm_img_width)+(m*ipgm_img_width),opgm_img_width*sizeof(DTYPE));
+	      }
+	      normalizeF2PGM(&output_pgm,temp);
+	      sprintf(fileoutputname, "output3d%d.pgm",i);	
+	      /* Output image */
+	      writePGM(&output_pgm,fileoutputname);
+	   }
 
 	   destroyPGM(&input_pgm);
 	   destroyPGM(&output_pgm);
 	   
 	   free(h_image);
 	   free(h_output);
+	   free(temp);
 
 	   clReleaseMemObject(d_image);
            clReleaseMemObject(d_filter);
@@ -282,4 +292,19 @@ int main()
 	   clReleaseContext(context);
 
 	   return 0;
+}
+
+void printFilter(DTYPE* data, unsigned int width, unsigned int height, unsigned int mapnum)
+{
+    int m,k;
+    DTYPE* temp = data+(mapnum*width*height);
+    for(m=0;m<height;m++)
+    {
+       for(k=0;k<width;k++)
+       {
+           printf("%1.2f,",temp[(width*m)+k]);
+       }
+       printf("\n");
+    }
+    printf("\n\n");
 }
