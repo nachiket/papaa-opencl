@@ -3,11 +3,12 @@
 #include <string.h>
 #include <CL/cl.h>
 #include <CL/cl_ext.h>
-#include "papi.h"
 #include "../../../caffe-ref/scripts/gen/lenet5_model.h"
 #include "pgm.h"
 
 typedef float DTYPE;
+
+extern long LoadOpenCLKernel(char const* path, char **buf);
 
 int main()
 {
@@ -15,7 +16,7 @@ int main()
 	   int Hstride=2,Vstride=2;
 	   register long long ptimer1=0;
 	   register long long ptimer2=0;
-	   int err, i =0,j=0, index =0;                            // error code returned from api calls
+	   int err, i =0,j=0,l=0, index =0;                            // error code returned from api calls
            pgm_t input_pgm,output_pgm;
 
 	   int ipgm_img_width, opgm_img_width;
@@ -36,7 +37,10 @@ int main()
 	   DTYPE  *h_image;
 	   DTYPE  *h_filter, *h_bias, *h_output;
 
-	   readPGM(&input_pgm,"output3d0.pgm");
+	   readPGM(&input_pgm,"lena.pgm");
+
+	   printf("cl:main program:img_width %d\n", input_pgm.width);
+	   printf("cl:main program:img_height %d\n", input_pgm.height);
 	   ipgm_img_width  = input_pgm.width-CONV1_FILTER_WIDTH+1;
 	   ipgm_img_height = input_pgm.height-CONV1_FILTER_HEIGHT+1;
 	   opgm_img_width  = ipgm_img_width/Hstride;
@@ -48,11 +52,11 @@ int main()
 	   unsigned int size_image = ipgm_img_width*ipgm_img_height;
 	   unsigned int mem_size_image = sizeof(DTYPE) * size_image;
            h_image    = (DTYPE*)malloc(mem_size_image * CONV1_NO_OUTPUTS);
-	   char* filenameinput[15];
-	   for(j=0;j<CONV1_NO_OUPUTS;j++)
+	   //char filenameinput[15];
+	   for(j=0;j<CONV1_NO_OUTPUTS;j++)
 	   {
-	       sprintf(filenameinput, "output3d%d.pgm",i);	
-	       readPGM(&input_pgm,filenameinput);	
+	      // sprintf(filenameinput,"../../../imgs/lena.pgm" );//"output3d%d.pgm",i);	
+	       readPGM(&input_pgm,"../../../imgs/lena.pgm");	
 	       for(i=0;i<ipgm_img_height;i++)
 	       {
 		 for(l=0;l<ipgm_img_width;l++)
@@ -182,18 +186,19 @@ int main()
        	   }    
        	  	//Launch OpenCL kernel
        	   size_t localWorkSize[3], globalWorkSize[3];
-       	   int filter_width  = Hstride;
-       	   int filter_height = Vstride;
+       	   int pool_width  = Hstride;
+       	   int pool_height = Vstride;
        	   int in_maps       = CONV1_NO_OUTPUTS;
        
        	   err  = clSetKernelArg(kernel[0], 0, sizeof(cl_mem), (void *)&d_image);
-       	   err |= clSetKernelArg(kernel[0], 1, sizeof(cl_mem), (void *)&d_filter);
-       	   err |= clSetKernelArg(kernel[0], 2, sizeof(cl_mem), (void *)&d_output);
-       	   err |= clSetKernelArg(kernel[0], 3, sizeof(int), (void *)&filter_width);
-       	   err |= clSetKernelArg(kernel[0], 4, sizeof(int), (void *)&filter_height);
-       	   err |= clSetKernelArg(kernel[0], 5, sizeof(int), (void *)&in_maps);
-       	   err |= clSetKernelArg(kernel[0], 6, sizeof(cl_mem), (void*)&d_bias);
-       	
+       	   err |= clSetKernelArg(kernel[0], 1, sizeof(cl_mem), (void *)&d_output);
+       	   err |= clSetKernelArg(kernel[0], 2, sizeof(int), (void *)&pool_width);
+       	   err |= clSetKernelArg(kernel[0], 3, sizeof(int), (void *)&pool_height);	
+       	   err |= clSetKernelArg(kernel[0], 4, sizeof(int), (void *)&ipgm_img_width);
+       	   err |= clSetKernelArg(kernel[0], 5, sizeof(int), (void *)&ipgm_img_height);
+       	   err |= clSetKernelArg(kernel[0], 6, sizeof(int), (void *)&Hstride);
+       	   err |= clSetKernelArg(kernel[0], 7, sizeof(int), (void *)&Vstride);
+
        	   if (err != CL_SUCCESS) {
        	        printf("Error: Failed to set kernel arguments! %d\n", err);	
        	        exit(1);
@@ -206,7 +211,7 @@ int main()
        	   globalWorkSize[1] = opgm_img_height;
        	   globalWorkSize[2] = CONV1_NO_OUTPUTS;
        	
-       	   ptimer1 = PAPI_get_virt_usec();
+       	   
        	   /*Enqueue task for parallel execution*/
        	   err = clEnqueueNDRangeKernel(commands, kernel[0], 3, NULL, globalWorkSize, localWorkSize, 0, NULL, &event);
        	   if (err != CL_SUCCESS)
@@ -218,7 +223,7 @@ int main()
 	        printf("Error: Failed to execute kernel! %d\n", err);
 	        exit(1);
 	    }
-	    ptimer2 = PAPI_get_virt_usec();
+	    
 	    printf("cl:main timing:PAPI clEnqueueNDRangeKernel %llu us\n",(ptimer2-ptimer1));
 	    clFinish(commands);
 	    cl_ulong time_start, time_end;
@@ -248,12 +253,12 @@ int main()
 	    }
 */
 	    char fileoutputname[15];
-            output_pgm.width = ipgm_img_width;
-	    output_pgm.height = ipgm_img_height;
+            output_pgm.width = opgm_img_width;
+	    output_pgm.height = opgm_img_height;
 
 	    for(i=0;i<CONV1_NO_OUTPUTS;i++)
             {
-	    	 normalizeF2PGM(&output_pgm, (h_output+(i*ipgm_img_width*ipgm_img_height)));
+	    	 normalizeF2PGM(&output_pgm, (h_output+(i*opgm_img_width*opgm_img_height)));
 	    	 sprintf(fileoutputname, "output3d%d.pgm",i);	
 	    	 /* Output image */
 	    	 writePGM(&output_pgm,fileoutputname);
