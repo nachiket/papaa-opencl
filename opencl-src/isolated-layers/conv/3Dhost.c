@@ -32,7 +32,7 @@ int main()
 	    // OpenCL device memory for matrices
 	   cl_mem d_image, d_filter, d_output, d_bias;
 
-	   readPGM(&input_pgm,"../../input/mnist_test_img_0.pgm");
+	   readPGM(&input_pgm,"input/mnist_test_img_0.pgm");
 	   ipgm_img_width  = input_pgm.width;
 	   ipgm_img_height = input_pgm.height;
 	
@@ -73,7 +73,11 @@ int main()
 	   clGetPlatformIDs(dev_cnt, platform_ids, NULL);
 	   for(i=0;i<dev_cnt;i++)
 	   {
+#ifdef DEVICE_GPU
+	    err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_GPU, 1, &device_id, NULL);
+#else
 	    err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_CPU, 1, &device_id, NULL);
+#endif
 	    if(err == CL_SUCCESS)
 		break;
 	   }

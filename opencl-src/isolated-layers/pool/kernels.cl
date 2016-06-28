@@ -13,7 +13,7 @@ __kernel void maxpool3D(
 	const int z = get_global_id(2);
 	const int xidx = Hstride*x;
 	const int yidx = Vstride*y;
-	const int oWidth  = Imwidth/Hstride;
+	const int oWidth  = ImWidth/Hstride;
 	const int oHeight = ImHeight/Vstride;
 	float maxval =0.0;
 	for (int r = 0; r <PoolHeight; r++) 
