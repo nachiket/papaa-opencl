@@ -22,7 +22,9 @@ __kernel void maxpool3D(
 		for(int c = 0; c <PoolWidth; c++)
 		{
 			const int idxIn = idxIntmp + c;
-			maxval = fmax(maxval,pInput[idxIn]); 
+			//maxval = fmax(maxval,pInput[idxIn]);
+			if(pInput[idxIn]>maxval)
+				maxval = pInput[idxIn];
 		}
 	}
 	pOutput[(((z*oHeight)+y)*oWidth)+x] = maxval;

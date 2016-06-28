@@ -38,32 +38,29 @@ int main()
 	   DTYPE  *h_filter, *h_bias, *h_output;
 
 	   readPGM(&input_pgm,"../conv/output3d0.pgm");
-	   ipgm_img_width  = input_pgm.width-CONV1_FILTER_WIDTH+1;
-	   ipgm_img_height = input_pgm.height-CONV1_FILTER_HEIGHT+1;
+	   ipgm_img_width  = input_pgm.width;
+	   ipgm_img_height = input_pgm.height;
 	   opgm_img_width  = ipgm_img_width/Hstride;
 	   opgm_img_height = ipgm_img_height/Vstride;
 	
-	   printf("cl:main program:img_width %d\n", ipgm_img_width);
-	   printf("cl:main program:img_height %d\n", ipgm_img_height);
+	   printf("cl:main program:img_width %d Hstride %d\n", ipgm_img_width,Hstride);
+	   printf("cl:main program:img_height %d Vstride %d\n", ipgm_img_height,Vstride);
+	   printf("cl:main program:output width %d\n", opgm_img_width);
+	   printf("cl:main program:output height %d\n", opgm_img_height);
+
  	  //Allocate host memory for matrices
 	   unsigned int size_image = ipgm_img_width*ipgm_img_height;
 	   unsigned int mem_size_image = sizeof(DTYPE) * size_image;
-           h_image    = (DTYPE*)malloc(mem_size_image * CONV1_NO_OUTPUTS);
-	   if(h_image == NULL)
-	   {
-		printf("Insufficient memory");
-	   }
+           h_image  = (DTYPE*)malloc(mem_size_image * CONV1_NO_OUTPUTS);
+	   
 	   char filenameinput[50];
 	   for(j=0;j<CONV1_NO_OUTPUTS;j++)
 	   {
 	       sprintf(filenameinput, "../conv/output3d%d.pgm",j);	
 	       readPGM(&input_pgm,filenameinput);	
-	       for(i=0;i<ipgm_img_height;i++)
+	       for(i=0;i<size_image;i++)
 	       {
-		 for(l=0;l<ipgm_img_width;l++)
-		 {
-	        	h_image[(i*ipgm_img_width)+(j*ipgm_img_width*ipgm_img_height)+l] = (DTYPE) input_pgm.buf[((i*ipgm_img_width)+l)]/255;
-	         }
+	        	h_image[(j*size_image)+i] = (DTYPE) input_pgm.buf[i]/255;
 	       }
 	   }
 	

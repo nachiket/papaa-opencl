@@ -313,9 +313,9 @@ int lenet5App(Mat &input, const ConvLayers &convModel, const FcLayers &fcModel) 
 	inVec.push_back(input);
 	// conv layer 1
 	convLayer(inVec, conv1Out, convModel.layerParams[0]);
-	printFilter(conv1Out[0]);
 	// pool layer 1
 	maxPoolLayer(conv1Out, pool1Out, 2, 2);
+	printFilter(pool1Out[0]);
 	// conv layer 2
 	convLayer(pool1Out, conv2Out, convModel.layerParams[1]);
 	// pool layer 2
