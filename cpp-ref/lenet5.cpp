@@ -319,7 +319,6 @@ int lenet5App(Mat &input, const ConvLayers &convModel, const FcLayers &fcModel) 
 	convLayer(pool1Out, conv2Out, convModel.layerParams[1]);
 	// pool layer 2
 	maxPoolLayer(conv2Out, pool2Out, 2, 2);
-	printFilter(pool2Out[0]);
 	// inner product 1
 	innerProductLayer(pool2Out, ip1Out, fcModel.layerParams[0]);
 	// ReLU layer
@@ -328,6 +327,9 @@ int lenet5App(Mat &input, const ConvLayers &convModel, const FcLayers &fcModel) 
 	innerProductLayer(ip1Out, ip2Out, fcModel.layerParams[1]);
 
 	softmaxLayer(ip2Out, prob);
+
+	for(int i=0;i<500;i++)
+	printf("%f,",fcModel.layerParams[0].W.at<float>(0,i));
 
 	cout << "-----------Output probabilities--------" << endl;
 	for(int p = 0; p < prob.size(); p++) {
