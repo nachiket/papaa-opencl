@@ -34,7 +34,7 @@ int main()
 	    // OpenCL device memory for matrices
 	   cl_mem d_image, d_filter, d_output, d_bias;
 
-	   readPGM(&input_pgm,"input/mnist_test_img_0.pgm");
+	   readPGM(&input_pgm,"input/mnist_test_img_5.pgm");
 	   ipgm_img_width  = input_pgm.width;
 	   ipgm_img_height = input_pgm.height;
 	

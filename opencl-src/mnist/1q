@@ -232,15 +232,18 @@ int main()
        	   d_filter2  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_filter2*CONV1_NO_INPUTS*CONV1_NO_OUTPUTS, h_filter2, &err);
        	   d_conv2    = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_conv2*CONV1_NO_OUTPUTS, NULL, &err);
        	   d_bias2    = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_bias2*CONV1_NO_OUTPUTS, h_bias2, &err);
-           //d_pool2    = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_pool2*CONV2_NO_OUTPUTS, NULL, &err);
-       	   //d_weights1 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, mem_size_weights1, h_weights1, &err);
-          // d_output1  = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_output1, NULL, &err);
-          // d_cbias1   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_cbias1, h_cbias1, &err);
-          // d_weights2 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_weights2, h_weights2, &err);
-          // d_output   = clCreateBuffer(context, CL_MEM_WRITE_ONLY, mem_size_output, NULL, &err);
-          // d_cbias2   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_cbias2, h_cbias2, &err);
+           d_pool2    = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_pool2*CONV2_NO_OUTPUTS, NULL, &err);
+       	   d_weights1 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, mem_size_weights1, h_weights1, &err);
+           d_output1  = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_output1, NULL, &err);
+           d_cbias1   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_cbias1, h_cbias1, &err);
+           d_weights2 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_weights2, h_weights2, &err);
+           d_output   = clCreateBuffer(context, CL_MEM_WRITE_ONLY, mem_size_output, NULL, &err);
+           d_cbias2   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_cbias2, h_cbias2, &err);
  
-	   if (!d_image || !d_filter1|| !d_conv1|| !d_bias1 || !d_pool1||!d_filter2|| !d_conv2|| !d_bias2 ) //|| !d_pool2||!d_weights1|| !d_output1|| !d_cbias1 ||!d_weights2|| !d_output|| !d_cbias2 )
+	   if (!d_image|| !d_filter1|| !d_conv1|| !d_bias1|| !d_pool1||   \
+	                   !d_filter2|| !d_conv2|| !d_bias2|| !d_pool2|| \
+			     !d_weights1|| !d_output1|| !d_cbias1 || \
+			     !d_weights2|| !d_output|| !d_cbias2 )
        	   {
        	      printf("Error: Failed to allocate device memory!\n");
        	      exit(1);
@@ -569,6 +572,7 @@ int main()
 
            printf("The digit in the image is %d \n",idx);
            destroyPGM(&input_pgm);
+	   destroyPGM(&output_pgm);
 	   
 	   free(h_image);
 	   free(h_output);
@@ -576,7 +580,9 @@ int main()
 	   free(temp1);
 
 	   clReleaseMemObject(d_image);
+           clReleaseMemObject(d_filter);
 	   clReleaseMemObject(d_output);
+           clReleaseMemObject(d_bias);
 
 	   clReleaseProgram(program);
 	   clReleaseKernel(kernel[0]);
