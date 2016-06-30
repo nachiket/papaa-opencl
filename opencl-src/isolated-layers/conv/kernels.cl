@@ -1,3 +1,83 @@
+__kernel void filter3D_2(
+	const __global float * pInput, 
+	__constant float * pFilter, 
+	__global float * pOutput, 
+	const int nFilterWidth,
+	const int nFilterHeight,
+	const int nInMaps,
+        __global const float * pBias) 
+{
+	const int x = get_global_id(0); 
+	const int y = get_global_id(1);
+	const int z = get_global_id(2);
+
+        const int OWidth  = get_global_size(0);
+        const int OHeight = get_global_size(1);
+	const int ImWidth = OWidth+nFilterWidth-1;
+	const int ImHeight = OHeight+nFilterHeight-1;	
+	float sum = 0;
+	int c = 0;
+	int idxFstart = z*nFilterHeight*nFilterWidth*nInMaps;
+
+	   for(int maps = 0; maps<nInMaps; maps++)
+	   { 
+		for (int r = 0; r <nFilterHeight; r++) 
+		{ 
+			const int idxFtmp = idxFstart + (maps*nFilterHeight + r) * nFilterWidth; 
+			const int idxIntmp = (((maps*ImHeight) + y + r) * ImWidth) + x;
+			for(c = 0; c <nFilterWidth; c++)
+			{
+				const int idxF = idxFtmp + c;
+				const int idxIn = idxIntmp + c;
+				sum += pFilter[idxF]*pInput[idxIn];
+			}
+		}
+	   }  
+	   pOutput[((z*OHeight*OWidth)+(y*OWidth)+x)] = sum + pBias[z];
+}
+
+__kernel void filter3D_1(
+	const __global float * pInput, 
+	__constant float * pFilter, 
+	__global float * pOutput, 
+	const int nFilterWidth,
+	const int nFilterHeight,
+	const int nInMaps,
+        __global const float * pBias) 
+{
+	const int x = get_global_id(0); 
+	const int y = get_global_id(1);
+	const int z = get_global_id(2);
+
+        const int ImWidth  = get_global_size(0);
+        const int ImHeight = get_global_size(1);
+	const int OWidth   = ImWidth - nFilterWidth +1;
+	const int OHeight  = ImHeight - nFilterHeight +1;
+	
+	float sum = 0;
+	int c = 0;
+	int idxFstart = z*nFilterHeight*nFilterWidth*nInMaps;
+
+	if((get_global_id(0)< OWidth) && (get_global_id(1)< OHeight))
+	{
+	   for(int maps = 0; maps<nInMaps; maps++)
+	   { 
+		for (int r = 0; r <nFilterHeight; r++) 
+		{ 
+			const int idxFtmp = idxFstart + (maps*nFilterHeight + r) * nFilterWidth; 
+			const int idxIntmp = (((maps*ImHeight) + y + r) * ImWidth) + x;
+			for(c = 0; c <nFilterWidth; c++)
+			{
+				const int idxF = idxFtmp + c;
+				const int idxIn = idxIntmp + c;
+				sum += pFilter[idxF]*pInput[idxIn];
+			}
+		}
+	   }  
+	   pOutput[((z*OHeight*OWidth)+(y*OWidth)+x)] = sum + pBias[z];
+	}
+}
+
 __kernel void filter2D(
 	const __global float * pInput, 
 	__constant float * pFilter, 
