@@ -70,7 +70,7 @@ int main()
 	   unsigned int mem_size_filter = sizeof(DTYPE) * size_filter;
 	   h_filter = (DTYPE*) conv2_weights;
 	   
-	   unsigned int size_output = ipgm_img_width * ipgm_img_height;
+	   unsigned int size_output = opgm_img_width * opgm_img_height;
 	   unsigned int mem_size_output = sizeof(DTYPE) * size_output;
 	   h_output = (DTYPE*) malloc(mem_size_output*CONV2_NO_OUTPUTS);
 	 
@@ -180,7 +180,7 @@ int main()
 	       exit(1);
 	   }
 	
-	   kernel[0] = clCreateKernel(program, "filter3D", &err);
+	   kernel[0] = clCreateKernel(program, "filter3D_2", &err);
 	   if (!kernel[0] || err != CL_SUCCESS)
 	   {
 	       printf("Error: Failed to create compute kernel!\n");
@@ -216,12 +216,12 @@ int main()
        	        printf("Error: Failed to set kernel arguments! %d\n", err);	
        	        exit(1);
           	   }
-       	   localWorkSize[0] = 2;
-       	   localWorkSize[1] = 2;
+       	   localWorkSize[0] = 10;
+       	   localWorkSize[1] = 10;
        	   localWorkSize[2] = 1;
        
-       	   globalWorkSize[0] = ipgm_img_width;
-       	   globalWorkSize[1] = ipgm_img_height;
+       	   globalWorkSize[0] = opgm_img_width;
+       	   globalWorkSize[1] = opgm_img_height;
        	   globalWorkSize[2] = CONV2_NO_OUTPUTS;
        	
        	   ptimer1 = PAPI_get_virt_usec();
@@ -267,23 +267,12 @@ int main()
 	   }
 
 	   char fileoutputname[15];
-           long k,m;
- 
-	   DTYPE* temp = (DTYPE*) malloc(opgm_img_width*opgm_img_height*sizeof(DTYPE));
            output_pgm.width  = opgm_img_width;
 	   output_pgm.height = opgm_img_height;
  
 	   for(i=0;i<CONV2_NO_OUTPUTS;i++)
            {
-	      for(m=0;m<opgm_img_height;m++)
-	      {
-//		for(k=0;k<opgm_img_width;k++)
-//		{
-//			temp[m*opgm_img_width + k] = h_output[i*ipgm_img_height*ipgm_img_width + m*ipgm_img_width + k];
-//		}
-		memcpy(temp+(m*opgm_img_width),h_output+(i*ipgm_img_height*ipgm_img_width)+(m*ipgm_img_width),opgm_img_width*sizeof(DTYPE));
-	      }
-	      normalizeF2PGM(&output_pgm,temp);
+	      normalizeF2PGM(&output_pgm,h_output+(i*opgm_img_height*opgm_img_width));
 	      sprintf(fileoutputname, "output3d%d.pgm",i);	
 	      /* Output image */
 	      writePGM(&output_pgm,fileoutputname);
@@ -294,7 +283,6 @@ int main()
 	   
 	   free(h_image);
 	   free(h_output);
-	   free(temp);
 
 	   clReleaseMemObject(d_image);
            clReleaseMemObject(d_filter);

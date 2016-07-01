@@ -7,21 +7,21 @@
 #include "lenet5_model.h"
 #include "pgm.h"
 
-#define HSTRIDE 2
-#define VSTRIDE 2
+#define POOL_SIZE 2
+#define STRIDE    2
 
 typedef float DTYPE;
 
 int main()
 {
-	cl_event event,event1,event2,event3;
-	int err, i=0,j =0,Hstride=HSTRIDE,Vstride=VSTRIDE;
+	cl_event event[8];
+	int err, i=0,j =0, stride=STRIDE,poolsize=POOL_SIZE;
 	register long long ptimer1=0;
 	register long long ptimer2=0;
         pgm_t input_pgm;
 
-        int ipgm_img_width,l1_width,l2_width;
-	int ipgm_img_height,l1_height,l2_height;
+        int ipgm_img_width,conv1_width,l1_width,conv2_width,l2_width;
+	int ipgm_img_height,conv1_height,l1_height,conv2_height,l2_height;
 
 	cl_device_id device_id;             // compute device id 
 	cl_context context;                 // compute context
@@ -35,7 +35,14 @@ int main()
         cl_mem d_weights1, d_output1, d_cbias1, d_cbias2, d_weights2, d_output;
         DTYPE  *h_weights1, *h_cbias1, *h_output1, *h_cbias2, *h_weights2, *h_output;
 
-	readPGM(&input_pgm,"../../imgs/mnist_test_img_0.pgm");
+	unsigned int size_bias = 1; //1 bias value for 1 output map 
+	unsigned int mem_size_bias = sizeof(DTYPE) * size_bias;
+        unsigned int size_weights = 1;
+        unsigned int mem_size_weights = sizeof(DTYPE) * size_weights;
+        unsigned int size_output = 1;
+        unsigned int mem_size_output = sizeof(DTYPE) * size_output;
+
+	readPGM(&input_pgm,"../../imgs/mnist_test_img_5.pgm");
 	ipgm_img_width  = input_pgm.width;
 	ipgm_img_height = input_pgm.height;
 	printf("cl:main program:img_width %d\n", ipgm_img_width);
@@ -56,17 +63,19 @@ int main()
 	unsigned int size_filter1 = CONV1_FILTER_WIDTH*CONV1_FILTER_HEIGHT;
 	unsigned int mem_size_filter1 = sizeof(DTYPE) * size_filter1;
 	h_filter1 = (DTYPE*) conv1_weights;
-	   
-	unsigned int size_conv1 = ipgm_img_width * ipgm_img_height;
+	
+	conv1_width  = ipgm_img_width-CONV1_FILTER_WIDTH+1; 
+	conv1_height = ipgm_img_height-CONV1_FILTER_HEIGHT+1;
+
+	unsigned int size_conv1 = conv1_width * conv1_height;
 	unsigned int mem_size_conv1 = sizeof(DTYPE) * size_conv1;
 	h_conv1 = (DTYPE*) malloc(mem_size_conv1*CONV1_NO_OUTPUTS);
 	 
-	unsigned int size_bias1 = 1; //1 bias value for 1 output map 
-	unsigned int mem_size_bias1 = sizeof(DTYPE) * size_bias1;
 	h_bias1 = (DTYPE*) conv1_bias;
 	
-	l1_width  = (ipgm_img_width-CONV1_FILTER_WIDTH+1)/Hstride; 
-	l1_height = (ipgm_img_height-CONV1_FILTER_WIDTH+1)/Vstride;
+	l1_width  = ((conv1_width-poolsize)/stride) +1; 
+	l1_height = ((conv1_height-poolsize)/stride) +1;
+
         unsigned int size_pool1 = l1_width * l1_height;
         unsigned int mem_size_pool1 = sizeof(DTYPE) * size_pool1;
         h_pool1 = (DTYPE*) malloc(mem_size_pool1*CONV1_NO_OUTPUTS);
@@ -74,45 +83,40 @@ int main()
 	unsigned int size_filter2 = CONV2_FILTER_WIDTH*CONV2_FILTER_HEIGHT;
 	unsigned int mem_size_filter2 = sizeof(DTYPE) * size_filter2;
 	h_filter2 = (DTYPE*) conv2_weights;
-	   
-	unsigned int size_conv2 = l1_width * l1_height;
+	
+	conv2_width = l1_width-CONV2_FILTER_WIDTH+1;
+	conv2_height = l1_height-CONV2_FILTER_HEIGHT+1;
+   
+	unsigned int size_conv2 = conv2_width * conv2_height ;
 	unsigned int mem_size_conv2 = sizeof(DTYPE) * size_conv2;
 	h_conv2 = (DTYPE*) malloc(mem_size_conv2*CONV2_NO_OUTPUTS);
 	 
-	unsigned int size_bias2 = 1; //1 bias value for 1 output map 
-	unsigned int mem_size_bias2 = sizeof(DTYPE) * size_bias2;
-	h_bias1 = (DTYPE*) conv2_bias;
+	h_bias2 = (DTYPE*) conv2_bias;
 	
-	l2_width  = (l1_width-CONV2_FILTER_WIDTH +1)/Hstride;
-	l2_height = (l1_height-CONV2_FILTER_HEIGHT+1)/Vstride;
+	l2_width  = ((conv2_width-poolsize)/stride) +1; 
+	l2_height = ((conv2_height-poolsize)/stride) +1;
+
         unsigned int size_pool2 = l2_width*l2_height;
         unsigned int mem_size_pool2 = sizeof(DTYPE) * size_pool2;
         h_pool2 = (DTYPE*) malloc(mem_size_pool2*CONV2_NO_OUTPUTS);
 
-        unsigned int size_weights1 = IP1_NO_INPUTS*IP1_NO_OUTPUTS;
-        unsigned int mem_size_weights1 = sizeof(DTYPE) * size_weights1;
         h_weights1 = (DTYPE*) ip1_weights;
 
-        unsigned int size_output1 = IP1_NO_OUTPUTS;
-        unsigned int mem_size_output1 = sizeof(DTYPE) * size_output1;
-        h_output1 = (DTYPE*) malloc(mem_size_output1);
-
-        unsigned int size_cbias1 = IP1_NO_OUTPUTS;
-        unsigned int mem_size_cbias1 = sizeof(DTYPE) * size_cbias1;
         h_cbias1 = (DTYPE*) ip1_bias;
 
-        unsigned int size_weights2 = IP2_NO_INPUTS*IP2_NO_OUTPUTS;
-        unsigned int mem_size_weights2 = sizeof(DTYPE) * size_weights2;
-        h_weights2 = (DTYPE*) ip2_weights;
+        h_output1 = (DTYPE*) malloc(sizeof(DTYPE)*IP1_NO_OUTPUTS);
 
-        unsigned int size_output = IP2_NO_OUTPUTS;
-        unsigned int mem_size_output = sizeof(DTYPE) * size_output;
-        h_output = (DTYPE*) malloc(mem_size_output);
-
-        unsigned int size_cbias2 = IP2_NO_OUTPUTS;
-        unsigned int mem_size_cbias2 = sizeof(DTYPE) * size_cbias2;
         h_cbias2 = (DTYPE*) ip2_bias;
 
+        h_weights2 = (DTYPE*) ip2_weights;
+
+        h_output = (DTYPE*) malloc(sizeof(DTYPE)*IP2_NO_OUTPUTS);
+	
+	if(!h_image || !h_conv1 || !h_pool1 || !h_conv2 || !h_pool2 || !h_output1 || !h_output || !h_filter1 || !h_filter2 || !h_bias1 || !h_bias2 || !h_weights1 || !h_cbias1 || !h_output1 || !h_weights2 || !h_cbias2 || !h_output )
+	{
+	    printf("Error: Failed to allocate host memory \n");
+	    exit(1);
+	}
 
         cl_uint dev_cnt = 0;
 	clGetPlatformIDs(0, 0, &dev_cnt);
@@ -144,13 +148,13 @@ int main()
 	    return EXIT_FAILURE;
    	}
 
-	   // Create a compute context 
-	   context = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
-	   if (!context)
-	   {
-	       printf("Error: Failed to create a compute context!\n");
-	       return EXIT_FAILURE;
-	   }
+	// Create a compute context 
+	context = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
+	if (!context)
+	{
+	     printf("Error: Failed to create a compute context!\n");
+	     return EXIT_FAILURE;
+	}
 	
 	   // Create a command commands
 	   commands = clCreateCommandQueue(context, device_id, CL_QUEUE_PROFILING_ENABLE, &err);
@@ -226,30 +230,31 @@ int main()
  	   // Create the input and output arrays in device memory for our calculation
        	   d_image    = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_image*CONV1_NO_INPUTS, h_image, &err);
        	   d_filter1  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_filter1*CONV1_NO_INPUTS*CONV1_NO_OUTPUTS, h_filter1, &err);
-       	   d_conv1    = clCreateBuffer(context, CL_MEM_WRITE_ONLY, mem_size_conv1*CONV1_NO_OUTPUTS, NULL, &err);
-       	   d_bias1    = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_bias1*CONV1_NO_OUTPUTS, h_bias1, &err);
+       	   d_conv1    = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_conv1*CONV1_NO_OUTPUTS, NULL, &err);
+       	   d_bias1    = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_bias*CONV1_NO_OUTPUTS, h_bias1, &err);
 	   d_pool1    = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_pool1*CONV1_NO_OUTPUTS, NULL, &err);
-       	   d_filter2  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_filter2*CONV1_NO_INPUTS*CONV1_NO_OUTPUTS, h_filter2, &err);
-       	   d_conv2    = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_conv2*CONV1_NO_OUTPUTS, NULL, &err);
-       	   d_bias2    = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_bias2*CONV1_NO_OUTPUTS, h_bias2, &err);
-           //d_pool2    = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_pool2*CONV2_NO_OUTPUTS, NULL, &err);
-       	   //d_weights1 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, mem_size_weights1, h_weights1, &err);
-          // d_output1  = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_output1, NULL, &err);
-          // d_cbias1   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_cbias1, h_cbias1, &err);
-          // d_weights2 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_weights2, h_weights2, &err);
-          // d_output   = clCreateBuffer(context, CL_MEM_WRITE_ONLY, mem_size_output, NULL, &err);
-          // d_cbias2   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_cbias2, h_cbias2, &err);
+       	   d_filter2  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_filter2*CONV2_NO_INPUTS*CONV2_NO_OUTPUTS, h_filter2, &err);
+       	   d_conv2    = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_conv2*CONV2_NO_OUTPUTS, NULL, &err);
+       	   d_bias2    = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_bias*CONV2_NO_OUTPUTS, h_bias2, &err);
+           d_pool2    = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_pool2*CONV2_NO_OUTPUTS, NULL, &err);
+       	   d_weights1 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, mem_size_weights*IP1_NO_INPUTS*IP1_NO_OUTPUTS, h_weights1, &err);
+           d_output1  = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_output*IP1_NO_OUTPUTS, NULL, &err);
+           d_cbias1   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_bias*IP1_NO_OUTPUTS, h_cbias1, &err);
+           d_weights2 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_weights*IP2_NO_INPUTS*IP2_NO_OUTPUTS, h_weights2, &err);
+           d_output   = clCreateBuffer(context, CL_MEM_WRITE_ONLY, mem_size_output*IP2_NO_OUTPUTS, NULL, &err);
+           d_cbias2   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_bias*IP2_NO_OUTPUTS, h_cbias2, &err);
  
-	   if (!d_image || !d_filter1|| !d_conv1|| !d_bias1 || !d_pool1||!d_filter2|| !d_conv2|| !d_bias2 ) //|| !d_pool2||!d_weights1|| !d_output1|| !d_cbias1 ||!d_weights2|| !d_output|| !d_cbias2 )
+	   if (!d_image || !d_filter1 || !d_conv1 || !d_bias1 || !d_pool1 || !d_filter2 || !d_conv2 || !d_bias2 || !d_pool2 || !d_weights1 || !d_output1 || !d_cbias1 || !d_weights2 || !d_output|| !d_cbias2 )
        	   {
        	      printf("Error: Failed to allocate device memory!\n");
        	      exit(1);
        	   }    
 
        	   //Launch OpenCL kernel
-       	   size_t conv1local[3], conv1global[3], conv2local[3], conv2global[3], pool1local[3], pool1global[3], pool2local[3], pool2global[3],relu_loc, relu_global, ip1_local,ip1_global,ip2_local, ip2_global, smax_local, smax_global;
-
-       	   ptimer1 = PAPI_get_virt_usec();
+       	   size_t local[3],global[3];
+       	   local[0] = 1;
+       	   local[1] = 1;
+       	   local[2] = 1;
 
        	   int filter_width1  = CONV1_FILTER_WIDTH;
        	   int filter_height1 = CONV1_FILTER_HEIGHT;
@@ -269,16 +274,13 @@ int main()
        	        exit(1);
            }
 
-       	   conv1local[0] = 2;
-       	   conv1local[1] = 2;
-       	   conv1local[2] = 1;
        
-       	   conv1global[0] = ipgm_img_width;
-       	   conv1global[1] = ipgm_img_height;
-       	   conv1global[2] = CONV1_NO_OUTPUTS;
+       	   global[0] = conv1_width;
+       	   global[1] = conv1_height;
+       	   global[2] = CONV1_NO_OUTPUTS;
        	   
 	  /*Enqueue task for parallel execution*/
-       	   err = clEnqueueNDRangeKernel(commands, kernel[0], 3, NULL, conv1global, conv1local, 0, NULL, &event);
+       	   err = clEnqueueNDRangeKernel(commands, kernel[0], 3, NULL, global, local, 0, NULL, &event[0]);
        	   if (err != CL_SUCCESS)
        	   {
 	        if(err == CL_INVALID_WORK_ITEM_SIZE)
@@ -289,64 +291,25 @@ int main()
 	        exit(1);
 	   }
 
-      	   clFinish(commands);	
-
-	   /*Retrieve result from device*/
-           err = clEnqueueReadBuffer(commands, d_conv1, CL_TRUE, 0, mem_size_conv1*CONV1_NO_OUTPUTS, h_conv1, 0, NULL, NULL);
-           if (err != CL_SUCCESS)
-	   {
-	        printf("Error: Failed to read output array! %d\n", err);
-	        exit(1);
-	   }
-
-           long m; 
-           l1_width   = ipgm_img_width-CONV1_FILTER_WIDTH+1;
-	   l1_height  = ipgm_img_height-CONV1_FILTER_HEIGHT+1;
-	   DTYPE* temp = (DTYPE*) malloc(l1_width*l1_height*sizeof(DTYPE)*CONV1_NO_OUTPUTS);
-
-	   for(i=0;i<CONV1_NO_OUTPUTS;i++)
-           {
-	      for(m=0;m<l1_height;m++)
-	      {
-		memcpy(temp+(i*l1_width*l1_height)+(m*l1_width),h_conv1+(i*ipgm_img_height*ipgm_img_width)+(m*ipgm_img_width),l1_width*sizeof(DTYPE));
-	      }
-	   }
-	   
-       	   clReleaseMemObject(d_image);
-           clReleaseMemObject(d_filter1);
-           clReleaseMemObject(d_conv1);
-           clReleaseMemObject(d_bias1);
-
-       	   d_conv1  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR ,sizeof(DTYPE)*l1_width*l1_height*CONV1_NO_OUTPUTS, temp, &err);
-           int pool_width  = Hstride;
-           int pool_height = Vstride;
-	   l1_width /= Hstride;
-	   l1_height /= Vstride;
-
            err  = clSetKernelArg(kernel[1], 0, sizeof(cl_mem), (void *)&d_conv1);
            err |= clSetKernelArg(kernel[1], 1, sizeof(cl_mem), (void *)&d_pool1);
-           err |= clSetKernelArg(kernel[1], 2, sizeof(int), (void *)&pool_width);
-           err |= clSetKernelArg(kernel[1], 3, sizeof(int), (void *)&pool_height);
-           err |= clSetKernelArg(kernel[1], 4, sizeof(int), (void *)&ipgm_img_width);
-           err |= clSetKernelArg(kernel[1], 5, sizeof(int), (void *)&ipgm_img_height);
-           err |= clSetKernelArg(kernel[1], 6, sizeof(int), (void *)&Hstride);
-           err |= clSetKernelArg(kernel[1], 7, sizeof(int), (void *)&Vstride);
+           err |= clSetKernelArg(kernel[1], 2, sizeof(int), (void *)&conv1_width);
+           err |= clSetKernelArg(kernel[1], 3, sizeof(int), (void *)&conv1_height);
+           err |= clSetKernelArg(kernel[1], 4, sizeof(int), (void *)&poolsize);
+           err |= clSetKernelArg(kernel[1], 5, sizeof(int), (void *)&stride);
 
            if (err != CL_SUCCESS) {
                 printf("Error: Failed to set kernel arguments! %d\n", err);
                 exit(1);
                    }
-           pool1local[0] = 2;
-           pool1local[1] = 2;
-           pool1local[2] = 1;
 
-           pool1global[0] = l1_width;
-           pool1global[1] = l1_height;
-           pool1global[2] = CONV1_NO_OUTPUTS;
+           global[0] = l1_width;
+           global[1] = l1_height;
+           global[2] = CONV1_NO_OUTPUTS;
 
 
            /*Enqueue task for parallel execution*/
-           err = clEnqueueNDRangeKernel(commands, kernel[1], 3, NULL, pool1global, pool1local, 0, NULL, &event);
+           err = clEnqueueNDRangeKernel(commands, kernel[1], 3, NULL, global, local, 1, &event[0], &event[1]);
            if (err != CL_SUCCESS)
            {
                 if(err == CL_INVALID_WORK_ITEM_SIZE)
@@ -357,108 +320,58 @@ int main()
                 exit(1);
 	   }
 
-	   clFinish(commands);
-
-           int filter_width  = CONV2_FILTER_WIDTH;
-           int filter_height = CONV2_FILTER_HEIGHT;
-           int in_maps       = CONV2_NO_INPUTS;
+           int filter_width2  = CONV2_FILTER_WIDTH;
+           int filter_height2 = CONV2_FILTER_HEIGHT;
+           int in_maps2       = CONV2_NO_INPUTS;
 
            err  = clSetKernelArg(kernel[0], 0, sizeof(cl_mem), (void *)&d_pool1);
            err |= clSetKernelArg(kernel[0], 1, sizeof(cl_mem), (void *)&d_filter2);
            err |= clSetKernelArg(kernel[0], 2, sizeof(cl_mem), (void *)&d_conv2);
-           err |= clSetKernelArg(kernel[0], 3, sizeof(int), (void *)&filter_width);
-           err |= clSetKernelArg(kernel[0], 4, sizeof(int), (void *)&filter_height);
-           err |= clSetKernelArg(kernel[0], 5, sizeof(int), (void *)&in_maps);
+           err |= clSetKernelArg(kernel[0], 3, sizeof(int), (void *)&filter_width2);
+           err |= clSetKernelArg(kernel[0], 4, sizeof(int), (void *)&filter_height2);
+           err |= clSetKernelArg(kernel[0], 5, sizeof(int), (void *)&in_maps2);
            err |= clSetKernelArg(kernel[0], 6, sizeof(cl_mem), (void*)&d_bias2);
 
            if (err != CL_SUCCESS) {
                 printf("Error: Failed to set kernel arguments! %d\n", err);
                 exit(1);
                    }
-           conv2local[0] = 2;
-           conv2local[1] = 2;
-           conv2local[2] = 1;
 
-           conv2global[0] = l1_width;
-           conv2global[1] = l1_height;
-           conv2global[2] = CONV2_NO_OUTPUTS;
+           global[0] = conv2_width;
+           global[1] = conv2_height;
+           global[2] = CONV2_NO_OUTPUTS;
 
            /*Enqueue task for parallel execution*/
-           err = clEnqueueNDRangeKernel(commands, kernel[0], 3, NULL, conv2global, conv2local, 0, NULL, &event);
+           err = clEnqueueNDRangeKernel(commands, kernel[0], 3, NULL, global, local, 1, &event[1], &event[2]);
            if (err != CL_SUCCESS)
            {
                 if(err == CL_INVALID_WORK_ITEM_SIZE)
                         printf("CL_INVALID_WORK_ITEM_SIZE \n");
                 if(err == CL_INVALID_WORK_GROUP_SIZE)
                         printf("CL_INVALID_WORK_GROUP_SIZE \n");
-                if(err == CL_OUT_OF_RESOURCES)
-                        printf("CL_OUT_OF_RESOURCES \n");
-                if(err == CL_OUT_OF_HOST_MEMORY)
-                        printf("CL_OUT_OF_HOST_MEMORY \n");
-                if(err == CL_MEM_OBJECT_ALLOCATION_FAILURE)
-                        printf("CL_MEM_OBJECT_ALLOCATION_FAILURE \n");
-                if(err == CL_INVALID_GLOBAL_WORK_SIZE)
-                        printf("CL_INVALID_GLOBAL_WORK_SIZE \n");
-                if(err == CL_INVALID_KERNEL_ARGS)
-                        printf("CL_INVALID_KERNEL_ARGS \n");
                 printf("Error: Failed to execute kernel! %d \n", err);
                 exit(1);
            }
-           clFinish(commands);
-
-           /*Retrieve result from device*/
-           err = clEnqueueReadBuffer(commands, d_conv2, CL_TRUE, 0, mem_size_conv2*CONV2_NO_OUTPUTS, h_conv2, 0, NULL, NULL);
-           if (err != CL_SUCCESS)
-           {
-                printf("Error: Failed to read output array! %d\n", err);
-                exit(1);
-           }
-
-           l2_width   = l1_width-CONV2_FILTER_WIDTH+1;
-           l2_height  = l1_height-CONV2_FILTER_HEIGHT+1;
-           DTYPE* temp1 = (DTYPE*) malloc(l2_width*l2_height*sizeof(DTYPE)*CONV2_NO_OUTPUTS);
-
-           for(i=0;i<CONV2_NO_OUTPUTS;i++)
-           {
-              for(m=0;m<l2_height;m++)
-              {
-                memcpy(temp1+(i*l2_width*l2_height)+(m*l2_width),h_conv2+(i*l1_height*l1_width)+(m*l1_width),l2_width*sizeof(DTYPE));
-              }
-           }
-
-           clReleaseMemObject(d_pool1);
-           clReleaseMemObject(d_filter2);
-           clReleaseMemObject(d_conv2);
-           clReleaseMemObject(d_bias2);
-
-           d_conv2  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR ,sizeof(DTYPE)*l2_width*l2_height*CONV2_NO_OUTPUTS, temp1, &err);
-	   l2_width /=Hstride;
-	   l2_height /= Vstride;
 
            err  = clSetKernelArg(kernel[1], 0, sizeof(cl_mem), (void *)&d_conv2);
            err |= clSetKernelArg(kernel[1], 1, sizeof(cl_mem), (void *)&d_pool2);
-           err |= clSetKernelArg(kernel[1], 2, sizeof(int), (void *)&pool_width);
-           err |= clSetKernelArg(kernel[1], 3, sizeof(int), (void *)&pool_height);
-           err |= clSetKernelArg(kernel[1], 4, sizeof(int), (void *)&l1_width);
-           err |= clSetKernelArg(kernel[1], 5, sizeof(int), (void *)&l1_height);
-           err |= clSetKernelArg(kernel[1], 6, sizeof(int), (void *)&Hstride);
-           err |= clSetKernelArg(kernel[1], 7, sizeof(int), (void *)&Vstride);
+           err |= clSetKernelArg(kernel[1], 2, sizeof(int), (void *)&conv2_width);
+           err |= clSetKernelArg(kernel[1], 3, sizeof(int), (void *)&conv2_height);
+           err |= clSetKernelArg(kernel[1], 4, sizeof(int), (void *)&poolsize);
+           err |= clSetKernelArg(kernel[1], 5, sizeof(int), (void *)&stride);
 
            if (err != CL_SUCCESS) {
                 printf("Error: Failed to set kernel arguments! %d\n", err);
                 exit(1);
                    }
-           pool2local[0] = 2;
-           pool2local[1] = 2;
-           pool2local[2] = 1;
 
-           pool2global[0] = l2_width;
-           pool2global[1] = l2_height;
-           pool2global[2] = CONV1_NO_OUTPUTS;
+           global[0] = l2_width;
+           global[1] = l2_height;
+           global[2] = CONV2_NO_OUTPUTS;
 
 
            /*Enqueue task for parallel execution*/
-           err = clEnqueueNDRangeKernel(commands, kernel[1], 3, NULL, pool1global, pool1local, 0, NULL, &event);
+           err = clEnqueueNDRangeKernel(commands, kernel[1], 3, NULL, global, local, 1, &event[2], &event[3]);
            if (err != CL_SUCCESS)
            {
                 if(err == CL_INVALID_WORK_ITEM_SIZE)
@@ -469,10 +382,7 @@ int main()
                 exit(1);
            }
 
-           clFinish(commands);
-
            int inputs1 = IP1_NO_INPUTS;
-           int inputs2 = IP2_NO_INPUTS;
 
            err  = clSetKernelArg(kernel[2], 0, sizeof(cl_mem), (void *)&d_pool2);
            err |= clSetKernelArg(kernel[2], 1, sizeof(cl_mem), (void *)&d_weights1);
@@ -480,72 +390,87 @@ int main()
            err |= clSetKernelArg(kernel[2], 3, sizeof(int), (void *)&inputs1);
            err |= clSetKernelArg(kernel[2], 4, sizeof(cl_mem), (void*)&d_cbias1);
 
-           err |= clSetKernelArg(kernel[3], 0, sizeof(cl_mem), (void*)&d_output1);
-
-           err  = clSetKernelArg(kernel[2], 0, sizeof(cl_mem), (void *)&d_output1);
-           err |= clSetKernelArg(kernel[2], 1, sizeof(cl_mem), (void *)&d_weights2);
-           err |= clSetKernelArg(kernel[2], 2, sizeof(cl_mem), (void *)&d_output);
-           err |= clSetKernelArg(kernel[2], 3, sizeof(int), (void *)&inputs2);
-           err |= clSetKernelArg(kernel[2], 4, sizeof(cl_mem), (void*)&d_cbias2);
-
-           err |= clSetKernelArg(kernel[4], 0, sizeof(cl_mem), (void*)&d_output);
 
            if (err != CL_SUCCESS) {
                 printf("Error: Failed to set kernel arguments! %d\n", err);
                 exit(1);
                    }
 
-           ip1_local= 4;
-           ip1_global = IP1_NO_OUTPUTS;
+          size_t ip_local  = 2;
+          size_t ip_global = IP1_NO_OUTPUTS;
 
            ptimer1 = PAPI_get_virt_usec();
            /*Enqueue task for parallel execution*/
-           err = clEnqueueNDRangeKernel(commands, kernel[2], 1, NULL, &ip1_global, &ip1_local, 0, NULL, &event);
+           err = clEnqueueNDRangeKernel(commands, kernel[2], 1, NULL, &ip_global, &ip_local, 1, &event[3], &event[4]);
            if (err != CL_SUCCESS)
            {
                 printf("Error: Failed to execute kernel! %d \n", err);
                 exit(1);
            }
 
-           err = clEnqueueNDRangeKernel(commands,kernel[3],1,NULL,&ip1_global,&ip1_local,1,&event, &event1);
+           err = clSetKernelArg(kernel[3], 0, sizeof(cl_mem), (void*)&d_output1);
+           if (err != CL_SUCCESS) {
+                printf("Error: Failed to set kernel arguments! %d\n", err);
+                exit(1);
+	   }
+
+           err = clEnqueueNDRangeKernel(commands,kernel[3],1,NULL,&ip_global,&ip_local,1,&event[4], &event[5]);
            if(err!= CL_SUCCESS)
            {
                 printf("Error: Failed to execute kernel %d \n", err);
                 exit(1);
            }
 
-           ip2_local  = 2;
-           ip2_global = IP2_NO_OUTPUTS;
+           int inputs2 = IP2_NO_INPUTS;
 
-           err = clEnqueueNDRangeKernel(commands, kernel[2], 1, NULL, &ip2_global, &ip2_local, 1,&event1, &event2);
+           err  = clSetKernelArg(kernel[2], 0, sizeof(cl_mem), (void *)&d_output1);
+           err |= clSetKernelArg(kernel[2], 1, sizeof(cl_mem), (void *)&d_weights2);
+           err |= clSetKernelArg(kernel[2], 2, sizeof(cl_mem), (void *)&d_output);
+           err |= clSetKernelArg(kernel[2], 3, sizeof(int), (void *)&inputs2);
+           err |= clSetKernelArg(kernel[2], 4, sizeof(cl_mem), (void*)&d_cbias2);
            if (err != CL_SUCCESS)
            {
                 printf("Error: Failed to execute kernel! %d \n", err);
                 exit(1);
            }
 
-           smax_local=IP2_NO_OUTPUTS;
-           smax_global=IP2_NO_OUTPUTS;
+           ip_global = IP2_NO_OUTPUTS;
 
-           err = clEnqueueNDRangeKernel(commands, kernel[4], 1, NULL, &smax_global, &smax_local, 1, &event2, &event3);
+           err = clEnqueueNDRangeKernel(commands, kernel[2], 1, NULL, &ip_global, &ip_local, 1,&event[5], &event[6]);
            if (err != CL_SUCCESS)
            {
                 printf("Error: Failed to execute kernel! %d \n", err);
                 exit(1);
            }
 
-           ptimer2 = PAPI_get_virt_usec();
-           printf("cl:main timing:PAPI clEnqueueNDRangeKernel %llu us\n",(ptimer2-ptimer1));
+           err = clSetKernelArg(kernel[4], 0, sizeof(cl_mem), (void*)&d_output);
+           if(err!= CL_SUCCESS)
+           {
+                printf("Error: Failed to execute kernel %d \n", err);
+                exit(1);
+	   }
+
+           size_t smax_local=IP2_NO_OUTPUTS;
+           size_t smax_global=IP2_NO_OUTPUTS;
+
+           err = clEnqueueNDRangeKernel(commands, kernel[4], 1, NULL, &smax_global, &smax_local, 1, &event[6], &event[7]);
+           if (err != CL_SUCCESS)
+           {
+                printf("Error: Failed to execute kernel! %d \n", err);
+                exit(1);
+           }
+
+          // ptimer2 = PAPI_get_virt_usec();
+          // printf("cl:main timing:PAPI clEnqueueNDRangeKernel %llu us\n",(ptimer2-ptimer1));
            clFinish(commands);
            cl_ulong time_start, time_end;
            double total_time;
-           clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
-           clGetEventProfilingInfo(event3, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
+           clGetEventProfilingInfo(event[0], CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
+           clGetEventProfilingInfo(event[7], CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
            total_time = time_end - time_start;
            printf("cl:main timing:opencl clEnqueueNDRangeKernel %0.3f us\n", total_time / 1000.0);
 
-           /*Retrieve result from device*/
-           err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_output, h_output, 0, NULL, NULL);
+           err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, sizeof(DTYPE)*IP2_NO_OUTPUTS, h_output, 0, NULL, NULL);
            if (err != CL_SUCCESS)
            {
                 printf("Error: Failed to read output array! %d\n", err);
@@ -568,15 +493,60 @@ int main()
 
 
            printf("The digit in the image is %d \n",idx);
+#if 0
+
+           clFinish(commands);
+
+           err = clEnqueueReadBuffer(commands, d_pool2, CL_TRUE, 0, mem_size_pool2*CONV2_NO_OUTPUTS, h_pool2, 0, NULL, NULL);
+           /*Retrieve result from device*/
+           if (err != CL_SUCCESS)
+           {
+                printf("Error: Failed to read output array! %d\n", err);
+                exit(1);
+           }
+
+	   pgm_t output_pgm;
+           char fileoutputname[15];
+           output_pgm.width  = l2_width;
+           output_pgm.height = l2_height;
+	   printf("output width %d \n", output_pgm.width);
+	   printf("output height %d \n", output_pgm.height);
+
+           for(i=0;i<CONV2_NO_OUTPUTS;i++)
+           {
+              normalizeF2PGM(&output_pgm,h_pool2+(i*output_pgm.width*output_pgm.height));
+              sprintf(fileoutputname, "output3d%d.pgm",i);
+              /* Output image */
+              writePGM(&output_pgm,fileoutputname);
+           }
+
+           destroyPGM(&output_pgm);
+#endif
            destroyPGM(&input_pgm);
 	   
 	   free(h_image);
+	   free(h_conv1);
+	   free(h_conv2);
+	   free(h_pool1);
+	   free(h_pool2);
+	   free(h_output1);
 	   free(h_output);
-	   free(temp);
-	   free(temp1);
 
-	   clReleaseMemObject(d_image);
-	   clReleaseMemObject(d_output);
+	
+	   clReleaseMemObject(d_cbias1);
+           clReleaseMemObject(d_cbias2);
+           clReleaseMemObject(d_weights1);
+           clReleaseMemObject(d_pool2);
+           clReleaseMemObject(d_conv2);
+	   clReleaseMemObject(d_pool1);
+           clReleaseMemObject(d_conv1);
+           clReleaseMemObject(d_image);
+           clReleaseMemObject(d_filter1);
+           clReleaseMemObject(d_bias1);
+           clReleaseMemObject(d_output1);
+           clReleaseMemObject(d_output);
+           clReleaseMemObject(d_bias2);
+           clReleaseMemObject(d_bias2);
 
 	   clReleaseProgram(program);
 	   clReleaseKernel(kernel[0]);

@@ -6,16 +6,13 @@ __kernel void iplayer(
         __global const float * pBias) 
 {
 	const int x = get_global_id(0);
+	const int idxStart = x*nInputs;
 	float sum = 0;
+
 	for (int i = 0; i <nInputs; i++) 
 	{ 
-           sum += pWeights[(x*nInputs)+i]*pInput[i];
+           sum += pWeights[idxstart+i]*pInput[i];
 	}
-/*	if(get_global_id(0)==0)
-	{
-	  for(int i=0; i < nInputs ; i++ )
-		printf("%d %f,",i, pWeights[i]);
-	}*/
 	pOutput[x] = sum + pBias[x];
 }
 

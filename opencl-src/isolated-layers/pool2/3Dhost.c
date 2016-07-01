@@ -13,7 +13,7 @@ extern long LoadOpenCLKernel(char const* path, char **buf);
 int main()
 {
 	   cl_event event,event1,event2;
-	   int Hstride=2,Vstride=2;
+	   int stride=2,poolsize=2;
 	   register long long ptimer1=0;
 	   register long long ptimer2=0;
 	   int err, i =0,j=0, l =0;                            // error code returned from api calls
@@ -40,11 +40,11 @@ int main()
 	   readPGM(&input_pgm,"../conv2/output3d0.pgm");
 	   ipgm_img_width  = input_pgm.width;
 	   ipgm_img_height = input_pgm.height;
-	   opgm_img_width  = ipgm_img_width/Hstride;
-	   opgm_img_height = ipgm_img_height/Vstride;
+	   opgm_img_width  = (ipgm_img_width-poolsize)/stride + 1;
+	   opgm_img_height = (ipgm_img_height-poolsize)/stride +1;
 	
-	   printf("cl:main program:img_width %d Hstride %d\n", ipgm_img_width,Hstride);
-	   printf("cl:main program:img_height %d Vstride %d\n", ipgm_img_height,Vstride);
+	   printf("cl:main program:img_width %d Hstride %d\n", ipgm_img_width,stride);
+	   printf("cl:main program:img_height %d Vstride %d\n", ipgm_img_height,stride);
 	   printf("cl:main program:output width %d\n", opgm_img_width);
 	   printf("cl:main program:output height %d\n", opgm_img_height);
 
@@ -52,7 +52,10 @@ int main()
 	   unsigned int size_image = ipgm_img_width*ipgm_img_height;
 	   unsigned int mem_size_image = sizeof(DTYPE) * size_image;
            h_image  = (DTYPE*)malloc(mem_size_image * CONV2_NO_OUTPUTS);
-	   
+	   if(h_image == NULL)
+	   {
+	     printf("insufficient memory \n");
+	   }
 	   char filenameinput[50];
 	   for(j=0;j<CONV2_NO_OUTPUTS;j++)
 	   {
@@ -66,8 +69,12 @@ int main()
 	
 	   unsigned int size_output = opgm_img_width * opgm_img_height;
 	   unsigned int mem_size_output = sizeof(DTYPE) * size_output;
-	   h_output = (DTYPE*) malloc(mem_size_output*CONV2_NO_OUTPUTS);
-	 
+	   h_output = (DTYPE*) malloc(mem_size_output*CONV2_NO_OUTPUTS); 
+	   if(h_output == NULL)
+	   {
+	     printf("insufficient memory \n");
+	   }
+
 	   cl_uint dev_cnt = 0;
 	   clGetPlatformIDs(0, 0, &dev_cnt);
 		
@@ -188,25 +195,20 @@ int main()
        	   }    
        	  	//Launch OpenCL kernel
        	   size_t localWorkSize[3], globalWorkSize[3];
-       	   int pool_width  = Hstride;
-       	   int pool_height = Vstride;
-       	   int in_maps     = CONV2_NO_OUTPUTS;
        
        	   err  = clSetKernelArg(kernel[0], 0, sizeof(cl_mem), (void *)&d_image);
        	   err |= clSetKernelArg(kernel[0], 1, sizeof(cl_mem), (void *)&d_output);
-       	   err |= clSetKernelArg(kernel[0], 2, sizeof(int), (void *)&pool_width);
-       	   err |= clSetKernelArg(kernel[0], 3, sizeof(int), (void *)&pool_height);	
-       	   err |= clSetKernelArg(kernel[0], 4, sizeof(int), (void *)&ipgm_img_width);
-       	   err |= clSetKernelArg(kernel[0], 5, sizeof(int), (void *)&ipgm_img_height);
-       	   err |= clSetKernelArg(kernel[0], 6, sizeof(int), (void *)&Hstride);
-       	   err |= clSetKernelArg(kernel[0], 7, sizeof(int), (void *)&Vstride);
+       	   err |= clSetKernelArg(kernel[0], 2, sizeof(int), (void *)&ipgm_img_width);
+       	   err |= clSetKernelArg(kernel[0], 3, sizeof(int), (void *)&ipgm_img_height);
+       	   err |= clSetKernelArg(kernel[0], 4, sizeof(int), (void *)&poolsize);
+       	   err |= clSetKernelArg(kernel[0], 5, sizeof(int), (void *)&stride);
 
        	   if (err != CL_SUCCESS) {
        	        printf("Error: Failed to set kernel arguments! %d\n", err);	
        	        exit(1);
           	   }
-       	   localWorkSize[0] = 2;
-       	   localWorkSize[1] = 2;
+       	   localWorkSize[0] = 1;
+       	   localWorkSize[1] = 1;
        	   localWorkSize[2] = 1;
        
        	   globalWorkSize[0] = opgm_img_width;
@@ -244,21 +246,8 @@ int main()
 	         exit(1);
 	    }
 
-	    {
-		long k,m;
-		for(m=0;m<opgm_img_height;m++)
-		{
-		    for(k=0;k<opgm_img_width;k++)
-		    {
-			printf("%f,",h_output[(opgm_img_width*m)+k]);
-		    }
-		    printf("\n");
-		}
-		printf("\n");
-	    }
-
 	    char fileoutputname[15];
-            output_pgm.width = opgm_img_width;
+            output_pgm.width  = opgm_img_width;
 	    output_pgm.height = opgm_img_height;
 
 	    for(i=0;i<CONV2_NO_OUTPUTS;i++)

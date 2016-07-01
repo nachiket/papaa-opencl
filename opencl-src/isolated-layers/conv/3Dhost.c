@@ -256,22 +256,11 @@ int main()
 	   }
 
 	   char fileoutputname[15];
-//           long k,m;
- 
-//	   DTYPE* temp = (DTYPE*) malloc(opgm_img_width*opgm_img_height*sizeof(DTYPE));
            output_pgm.width  = opgm_img_width;
 	   output_pgm.height = opgm_img_height;
  
 	   for(i=0;i<CONV1_NO_OUTPUTS;i++)
            {
-//	      for(m=0;m<opgm_img_height;m++)
-//	      {
-//		for(k=0;k<opgm_img_width;k++)
-//		{
-//			temp[m*opgm_img_width + k] = h_output[i*ipgm_img_height*ipgm_img_width + m*ipgm_img_width + k];
-//		}
-//		memcpy(temp+(m*opgm_img_width),h_output+(i*ipgm_img_height*ipgm_img_width)+(m*ipgm_img_width),opgm_img_width*sizeof(DTYPE));
-//	      }
 	      normalizeF2PGM(&output_pgm,h_output+(i*opgm_img_width*opgm_img_height));
 	      sprintf(fileoutputname, "output3d%d.pgm",i);	
 	      /* Output image */
@@ -283,7 +272,6 @@ int main()
 	   
 	   free(h_image);
 	   free(h_output);
-//	   free(temp);
 
 	   clReleaseMemObject(d_image);
            clReleaseMemObject(d_filter);
