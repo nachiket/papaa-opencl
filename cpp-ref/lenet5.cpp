@@ -18,9 +18,12 @@ The network is trained using Caffe and the model is stored as C file
 #include <vector>
 #include <math.h>
 #include "lenet5_model.h"
+#include "papi.h"
 
 using namespace cv;
 using namespace std;
+
+unsigned long long t1, t2;
 
 // Structure defs to store the layer weights and bias
 typedef struct ConvWtBias {
@@ -311,6 +314,8 @@ int lenet5App(Mat &input, const ConvLayers &convModel, const FcLayers &fcModel) 
 	vector<float> ip1Out, ip2Out, prob;
 	// conv layer requires vector of mat.
 	inVec.push_back(input);
+	
+	t1 = PAPI_get_virt_usec();
 	// conv layer 1
 	convLayer(inVec, conv1Out, convModel.layerParams[0]);
 	// pool layer 1
@@ -328,8 +333,7 @@ int lenet5App(Mat &input, const ConvLayers &convModel, const FcLayers &fcModel) 
 
 	softmaxLayer(ip2Out, prob);
 
-	for(int i=0;i<500;i++)
-	printf("%f,",fcModel.layerParams[0].W.at<float>(0,i));
+	t2 = PAPI_get_virt_usec();
 
 	cout << "-----------Output probabilities--------" << endl;
 	for(int p = 0; p < prob.size(); p++) {
@@ -369,7 +373,7 @@ int main(int argc, char **argv) {
 	int predNo = lenet5App(normInput, convModel, fcModel);
 
 	cout << "The digit in the image is = " << predNo << endl;
-	cout<<"Application complete"<<endl;
+	cout<<"Application complete time %lld "<< (t2-t1)<<endl;
 
 	return 0;
 }
