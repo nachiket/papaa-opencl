@@ -12,8 +12,13 @@
 
 typedef float DTYPE;
 
-int main()
-{
+int main(int argc, char **argv) {
+
+        if(argc < 2) {
+                printf("Please specify the image path \n");
+                exit(1);
+        }
+
 	cl_event event[8];
 	int err, i=0,j =0, stride=STRIDE,poolsize=POOL_SIZE;
 	register long long int ptimer1=0;
@@ -42,7 +47,7 @@ int main()
         unsigned int size_output = 1;
         unsigned int mem_size_output = sizeof(DTYPE) * size_output;
 
-	readPGM(&input_pgm,"../../imgs/mnist_test_img_5.pgm");
+	readPGM(&input_pgm,argv[1]);
 	ipgm_img_width  = input_pgm.width;
 	ipgm_img_height = input_pgm.height;
 	printf("cl:main program:img_width %d\n", ipgm_img_width);
