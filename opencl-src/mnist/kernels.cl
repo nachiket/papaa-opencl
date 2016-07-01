@@ -48,8 +48,8 @@ __kernel void maxpool3D(
         const int y = get_global_id(1);
         const int z = get_global_id(2);
 
-        const oWidth  = get_global_size(0);
-        const oHeight = get_global_size(1);
+        const int oWidth  = get_global_size(0);
+        const int oHeight = get_global_size(1);
 
         const int xidx = nStride*x;
         const int yidx = nStride*y;
