@@ -3,7 +3,7 @@ exec=lenet_app
 
 CC=g++
 CPPFLAGS= -g $(shell pkg-config --cflags opencv) -I/usr/local/include/opencv2
-LIBS=$(shell pkg-config --libs opencv)
+LIBS=$(shell pkg-config --libs opencv) /usr/local/lib/libpapi.a
 
 OBJ_DIR= obj
 CPP_OBJS := $(addprefix $(OBJ_DIR)/,$(notdir $(patsubst %.cpp,%.o,$(filter %.cpp,$(CPP_SRCS)))))

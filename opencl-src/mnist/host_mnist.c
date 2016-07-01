@@ -42,7 +42,7 @@ int main()
         unsigned int size_output = 1;
         unsigned int mem_size_output = sizeof(DTYPE) * size_output;
 
-	readPGM(&input_pgm,"../../imgs/mnist_test_img_5.pgm");
+	readPGM(&input_pgm,"../../imgs/mnist_test_img_0.pgm");
 	ipgm_img_width  = input_pgm.width;
 	ipgm_img_height = input_pgm.height;
 	printf("cl:main program:img_width %d\n", ipgm_img_width);
