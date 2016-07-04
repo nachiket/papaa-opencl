@@ -139,10 +139,10 @@ int main(int argc, char **argv) {
 #endif
 	   if(err == CL_SUCCESS)
 	   {
-		char name[20],vendor[20],version[20];
-		clGetPlatformInfo(platforms_ids[i],CL_PLATFORM_NAME,sizeof(name);&name[0],NULL);
-		clGetPlatformInfo(platforms_ids[i],CL_PLATFORM_VENDOR,sizeof(vendor);&vendor[0],NULL);
-		clGetPlatformInfo(platforms_ids[i],CL_PLATFORM_VERSION,sizeof(version);&version[0],NULL);
+		char name[100],vendor[100],version[100];
+		clGetPlatformInfo(platform_ids[i],CL_PLATFORM_NAME,sizeof(name),&name[0],NULL);
+		clGetPlatformInfo(platform_ids[i],CL_PLATFORM_VENDOR,sizeof(vendor),&vendor[0],NULL);
+		clGetPlatformInfo(platform_ids[i],CL_PLATFORM_VERSION,sizeof(version),&version[0],NULL);
 		printf("Using Platform %s from vendor %s \n Opencl Version Implemented is %s \n",name,vendor,version);
 		break;
 	   }
