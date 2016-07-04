@@ -129,15 +129,25 @@ int main(int argc, char **argv) {
 	cl_platform_id platform_ids[5];
 	
 	clGetPlatformIDs(dev_cnt, platform_ids, NULL);
+
 	for(i=0;i<dev_cnt;i++)
 	{
 #ifdef DEVICE_GPU
 	   err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_GPU, 1, &device_id, NULL);
+#elif DEVICE_ACC
+	   err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_ACCELERATOR, 1, &device_id, NULL);
 #else
 	   err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_CPU, 1, &device_id, NULL);
 #endif
 	   if(err == CL_SUCCESS)
+	   {
+		char name[100],vendor[100],version[100];
+		clGetPlatformInfo(platform_ids[i],CL_PLATFORM_NAME,sizeof(name),&name[0],NULL);
+		clGetPlatformInfo(platform_ids[i],CL_PLATFORM_VENDOR,sizeof(vendor),&vendor[0],NULL);
+		clGetPlatformInfo(platform_ids[i],CL_PLATFORM_VERSION,sizeof(version),&version[0],NULL);
+		printf("Using Platform %s from vendor %s \n Opencl Version Implemented is %s \n",name,vendor,version);
 		break;
+	   }
 	}
 	if (err != CL_SUCCESS)
 	{
