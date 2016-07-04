@@ -134,6 +134,8 @@ int main(int argc, char **argv) {
 	{
 #ifdef DEVICE_GPU
 	   err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_GPU, 1, &device_id, NULL);
+#elif DEVICE_ACC
+	   err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_ACCELERATOR, 1, &device_id, NULL);
 #else
 	   err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_CPU, 1, &device_id, NULL);
 #endif
