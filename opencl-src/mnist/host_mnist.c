@@ -124,6 +124,7 @@ int main()
 	cl_platform_id platform_ids[5];
 	
 	clGetPlatformIDs(dev_cnt, platform_ids, NULL);
+
 	for(i=0;i<dev_cnt;i++)
 	{
 #ifdef DEVICE_GPU
@@ -132,7 +133,14 @@ int main()
 	   err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_CPU, 1, &device_id, NULL);
 #endif
 	   if(err == CL_SUCCESS)
+	   {
+		char name[20],vendor[20],version[20];
+		clGetPlatformInfo(platforms_ids[i],CL_PLATFORM_NAME,sizeof(name);&name[0],NULL);
+		clGetPlatformInfo(platforms_ids[i],CL_PLATFORM_VENDOR,sizeof(vendor);&vendor[0],NULL);
+		clGetPlatformInfo(platforms_ids[i],CL_PLATFORM_VERSION,sizeof(version);&version[0],NULL);
+		printf("Using Platform %s from vendor %s \n Opencl Version Implemented is %s \n",name,vendor,version);
 		break;
+	   }
 	}
 	if (err != CL_SUCCESS)
 	{
@@ -546,7 +554,7 @@ int main()
            clReleaseMemObject(d_output1);
            clReleaseMemObject(d_output);
            clReleaseMemObject(d_bias2);
-           clReleaseMemObject(d_bias2);
+           clReleaseMemObject(d_weights2);
 
 	   clReleaseProgram(program);
 	   clReleaseKernel(kernel[0]);
