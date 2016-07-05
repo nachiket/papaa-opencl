@@ -16,6 +16,7 @@ _make all_
 
 _./lenet_app -m sample -i ../imgs/mnist_test_img_0.pgm_
 
-3. To run the app in the full 'test' mode, untar the ../imgs/mnist-testset.tar.gz and then execute 
+3. To run the app in the full 'test' mode, untar the ../imgs/mnist-testset.tar.gz and then execute
+
 _./lenet_app -m test -f ../imgs/mnist_test_img_list.csv -d ../imgs/mnist-testset_
 
