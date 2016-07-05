@@ -383,7 +383,9 @@ int lenet5App(lenet5 *plenet5)
 {
 
 	cl_event event[8];
-	int err=0;
+	int err=0,i=0;
+	int idx=-1;
+	float result = -1.0;
 	register long long int ptimer1=0;
 	register long long int ptimer2=0;
 
@@ -602,19 +604,32 @@ int lenet5App(lenet5 *plenet5)
 	exit(1);
 	}
 
+	printf("Output Probabilities are \n");
+	for(i=0;i<plenet5->ip2.nOutputs;i++)
+	{
+	printf("%e,",plenet5->ip2.pOutput[i]);
+	if(plenet5->ip2.pOutput[i]>result)
+	{
+	   result = plenet5->ip2.pOutput[i];
+	   idx = i;
+	}
+	}
+	printf("\n");
+    	printf("The digit in the image is %d \n",idx);
+
 	return 0;
 }
 
 int main(int argc, char **argv)
 {
 	int i=0,j =0;
+	pgm_t input_pgm;
+	lenet5 olenet5;
+
         if(argc < 2) {
                 printf("Please specify the image path \n");
                 exit(1);
         }
-
-	pgm_t input_pgm;
-	lenet5 olenet5;
 
 	readPGM(&input_pgm,argv[1]);
 	ipgm_img_width  = input_pgm.width;
@@ -666,21 +681,6 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 	
-	int idx=-1;
-	float result = -1.0;
-	printf("Output Probabilities \n");
-	for(i=0;i<IP2_NO_OUTPUTS;i++)
-	{
-	printf("%e,",olenet5.ip2.pOutput[i]);
-	if(olenet5.ip2.pOutput[i]>result)
-	{
-	   result = olenet5.ip2.pOutput[i];
-	   idx = i;
-	}
-	}
-	printf("\n");
-    	printf("The digit in the image is %d \n",idx);
-
     	destroyPGM(&input_pgm);
 	
 	if (FreeDeviceData())
