@@ -9,7 +9,7 @@
 
 typedef float DTYPE;
 
-int main()
+int main(int argc, char** argv)
 {
 	   cl_event event,event1,event2;
 	   int j =0,stride=2;
@@ -34,7 +34,12 @@ int main()
 	    // OpenCL device memory for matrices
 	   cl_mem d_image, d_filter, d_output, d_bias;
 
-	   readPGM(&input_pgm,"input/lena.pgm");
+	   if (argc != 2) {
+		   printf("Expecting 2 arguments.\n");
+		   exit(1);
+	   }
+
+	   readPGM(&input_pgm,argv[1]);
 	   ipgm_img_width  = input_pgm.width;
 	   ipgm_img_height = input_pgm.height;
 	
