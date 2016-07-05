@@ -78,7 +78,7 @@ __kernel void filter3D_1(
 	}
 }
 
-__kernel void filter2D(
+__kernel void convolve(
 	const __global float * pInput, 
 	__constant float * pFilter, 
 	__global float * pOutput, 
@@ -112,7 +112,7 @@ __kernel void filter2D(
 }
 
 
-__kernel void filter2D_unroll(
+__kernel void convolve_unroll(
         const __global float * pInput,
         __constant float * pFilter,
         __global float * pOutput,
