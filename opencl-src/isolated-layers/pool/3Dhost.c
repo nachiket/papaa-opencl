@@ -37,7 +37,12 @@ int main()
 	   DTYPE  *h_image;
 	   DTYPE  *h_filter, *h_bias, *h_output;
 
-	   readPGM(&input_pgm,"../conv/output3d0.pgm");
+	   if (argc != 2) {
+		   printf("Expecting 2 arguments.\n");
+		   exit(1);
+	   }
+
+	   readPGM(&input_pgm,argv[1]);
 	   ipgm_img_width  = input_pgm.width;
 	   ipgm_img_height = input_pgm.height;
 	   opgm_img_width  = ipgm_img_width/Hstride;
