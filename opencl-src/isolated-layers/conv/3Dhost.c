@@ -9,6 +9,8 @@
 
 typedef float DTYPE;
 
+extern long LoadOpenCLKernel(char const* path, char **buf);
+
 int main(int argc, char** argv)
 {
 	   cl_event event,event1,event2;
