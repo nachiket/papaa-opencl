@@ -1,17 +1,18 @@
 
-all:
-	gcc -I/usr/local/include class_host.c load_kernel.c ../../../caffe-ref/scripts/gen/lenet5_model.c -o conv3Dcpu -lm -lOpenCL -O3 /usr/local/lib/libpapi.a
-	./conv3Dcpu | more
-	gcc -DDEVICE_GPU -I/usr/local/include class_host.c load_kernel.c ../../../caffe-ref/scripts/gen/lenet5_model.c -o conv3Dgpu -lm -lOpenCL -O3 /usr/local/lib/libpapi.a
-	./conv3Dgpu | more
+all: compile run
 
-3dcpu:
-	gcc -I/usr/local/include class_host.c load_kernel.c ../../../caffe-ref/scripts/gen/lenet5_model.c -o conv3Dcpu -lm -lOpenCL -O3 /usr/local/lib/libpapi.a
-	./conv3Dcpu | more
+compile: class_cpu class_gpu
 
-3dgpu:
-	gcc -DDEVICE_GPU -I/usr/local/include class_host.c load_kernel.c ../../../caffe-ref/scripts/gen/lenet5_model.c -o conv3Dgpu -lm -lOpenCL -O3 /usr/local/lib/libpapi.a
-	./conv3Dgpu | more
+class_cpu: class_host.c load_kernel.c ../../../caffe-ref/scripts/gen/lenet5_model.c
+	gcc -O3 class_host.c load_kernel.c ../../../caffe-ref/scripts/gen/lenet5_model.c -o conv2Dcpu -lOpenCL -lpapi
+
+class_gpu: class_host.c load_kernel.c ../../../caffe-ref/scripts/gen/lenet5_model.c
+	gcc -DDEVICE_GPU -O3 class_host.c load_kernel.c ../../../caffe-ref/scripts/gen/lenet5_model.c -o conv3Dgpu -lOpenCL -lpapi
+
+run:
+	./class_cpu pool.pgm
+	./class_gpu pool.pgm
 
 clean:
-	rm -rf conv* output*
+	rm -rf class* output*
+
