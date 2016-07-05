@@ -177,15 +177,15 @@ int alloc_host_memory(lenet5* plenet5)
 
 int free_host_mem (lenet5 *plenet5)
 {
-   free(plenet5->conv1.pInput);
-   free(plenet5->conv1.pOutput);
-   free(plenet5->pool1.pOutput);
-   free(plenet5->conv2.pOutput);
-   free(plenet5->pool2.pOutput);
-   free(plenet5->ip1.pOutput);
-   free(plenet5->ip2.pOutput);
+	free(plenet5->conv1.pInput);
+	free(plenet5->conv1.pOutput);
+	free(plenet5->pool1.pOutput);
+	free(plenet5->conv2.pOutput);
+	free(plenet5->pool2.pOutput);
+	free(plenet5->ip1.pOutput);
+	free(plenet5->ip2.pOutput);
 
-   return 0;
+	return 0;
 }
 
 int InitDevice()
@@ -252,144 +252,367 @@ int InitDevice()
 
 int BuildDeviceKernel ()
 {
-   int err; 
-   // Create the compute program from the source file
-   char *KernelSource;
-   long lFileSize;
-   lFileSize = LoadOpenCLKernel("kernels.cl", &KernelSource);
-   if( lFileSize < 0L ) {
-       perror("File read failed");
-       return 1;
-   }
+	int err; 
+	// Create the compute program from the source file
+	char *KernelSource;
+	long lFileSize;
+	lFileSize = LoadOpenCLKernel("kernels.cl", &KernelSource);
+	if( lFileSize < 0L ) {
+	perror("File read failed");
+	return 1;
+	}
 
-   program = clCreateProgramWithSource(context, 1, (const char **) & KernelSource, NULL, &err);
-   if (!program)
-   {
-       printf("Error: Failed to create compute program!\n");
-       return EXIT_FAILURE;
-   }
+	program = clCreateProgramWithSource(context, 1, (const char **) & KernelSource, NULL, &err);
+	if (!program)
+	{
+	printf("Error: Failed to create compute program!\n");
+	return EXIT_FAILURE;
+	}
 
-   // Build the program executable
-   err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
-   if (err != CL_SUCCESS)
-   {
-       size_t len;
-       char buffer[2048];
-       printf("Error: Failed to build program executable!\n");
-       clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
-       printf("%s\n", buffer);
-       exit(1);
-   }
+	// Build the program executable
+	err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
+	if (err != CL_SUCCESS)
+	{
+	size_t len;
+	char buffer[2048];
+	printf("Error: Failed to build program executable!\n");
+	clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
+	printf("%s\n", buffer);
+	exit(1);
+	}
 
-   kernel[0] = clCreateKernel(program, "filter3D", &err);
-   if (!kernel[0] || err != CL_SUCCESS)
-   {
-       printf("Error: Failed to create compute kernel!\n");
-       exit(1);
-   }
+	kernel[0] = clCreateKernel(program, "filter3D", &err);
+	if (!kernel[0] || err != CL_SUCCESS)
+	{
+	printf("Error: Failed to create compute kernel!\n");
+	exit(1);
+	}
 
-   kernel[1] = clCreateKernel(program, "maxpool3D", &err);
-   if (!kernel[1] || err != CL_SUCCESS)
-   {
-       printf("Error: Failed to create compute kernel!\n");
-       exit(1);
-   }
+	kernel[1] = clCreateKernel(program, "maxpool3D", &err);
+	if (!kernel[1] || err != CL_SUCCESS)
+	{
+	printf("Error: Failed to create compute kernel!\n");
+	exit(1);
+	}
 
-   kernel[2] = clCreateKernel(program, "iplayer", &err);
-   if (!kernel[2] || err != CL_SUCCESS)
-   {
-       printf("Error: Failed to create compute kernel!\n");
-       exit(1);
-   }
+	kernel[2] = clCreateKernel(program, "iplayer", &err);
+	if (!kernel[2] || err != CL_SUCCESS)
+	{
+	printf("Error: Failed to create compute kernel!\n");
+	exit(1);
+	}
 
-   kernel[3] = clCreateKernel(program, "relu_layer", &err);
-   if (!kernel[3] || err != CL_SUCCESS)
-   {
-       printf("Error: Failed to create compute kernel!\n");
-       exit(1);
-   }
+	kernel[3] = clCreateKernel(program, "relu_layer", &err);
+	if (!kernel[3] || err != CL_SUCCESS)
+	{
+	printf("Error: Failed to create compute kernel!\n");
+	exit(1);
+	}
 
-   kernel[4] = clCreateKernel(program, "softmax", &err);
-   if (!kernel[4] || err != CL_SUCCESS)
-   {
-       printf("Error: Failed to create compute kernel!\n");
-       exit(1);
-   }
-   return 0;
+	kernel[4] = clCreateKernel(program, "softmax", &err);
+	if (!kernel[4] || err != CL_SUCCESS)
+	{
+	printf("Error: Failed to create compute kernel!\n");
+	exit(1);
+	}
+	return 0;
 }
 
 int alloc_dev_memory(lenet5 * plenet5)
 {
-    int err;
-    d_image    = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_image*plenet5->conv1.nInputs, plenet5->conv1.pInput, &err);
-    d_filter1  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_filter1*plenet5->conv1.nInputs*plenet5->conv1.nOutputs, plenet5->conv1.pFilter, &err);
-    d_conv1    = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_conv1*plenet5->conv1.nOutputs, NULL, &err);
-    d_bias1    = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , sizeof(DTYPE)*plenet5->conv1.nOutputs, plenet5->conv1.pBias, &err);
-    d_pool1    = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_pool1*plenet5->pool1.nMaps, NULL, &err);
-    d_filter2  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_filter2*plenet5->conv2.nInputs*plenet5->conv2.nOutputs, plenet5->conv2.pFilter, &err);
-    d_conv2    = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_conv2*plenet5->conv2.nOutputs, NULL, &err);
-    d_bias2    = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , sizeof(DTYPE)*plenet5->conv2.nOutputs,plenet5->conv2.pBias, &err);
-    d_pool2    = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_pool2*plenet5->pool2.nMaps, NULL, &err);
-    d_weights1 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(DTYPE)*plenet5->ip1.nInputs*plenet5->ip1.nOutputs, plenet5->ip1.pWeights, &err);
-    d_output1  = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(DTYPE)*plenet5->ip1.nOutputs, NULL, &err);
-    d_cbias1   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , sizeof(DTYPE)*plenet5->ip1.nOutputs, plenet5->ip1.pBias, &err);
-    d_weights2 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , sizeof(DTYPE)*plenet5->ip2.nInputs*plenet5->ip2.nOutputs, plenet5->ip2.pWeights, &err);
-    d_output   = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(DTYPE)*plenet5->ip2.nOutputs, NULL, &err);
-    d_cbias2   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , sizeof(DTYPE)*plenet5->ip2.nOutputs, plenet5->ip2.pBias, &err);
- 
+	int err;
+	d_image    = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_image*plenet5->conv1.nInputs, plenet5->conv1.pInput, &err);
+	d_filter1  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_filter1*plenet5->conv1.nInputs*plenet5->conv1.nOutputs, plenet5->conv1.pFilter, &err);
+	d_conv1    = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_conv1*plenet5->conv1.nOutputs, NULL, &err);
+	d_bias1    = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , sizeof(DTYPE)*plenet5->conv1.nOutputs, plenet5->conv1.pBias, &err);
+	d_pool1    = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_pool1*plenet5->pool1.nMaps, NULL, &err);
+	d_filter2  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_filter2*plenet5->conv2.nInputs*plenet5->conv2.nOutputs, plenet5->conv2.pFilter, &err);
+	d_conv2    = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_conv2*plenet5->conv2.nOutputs, NULL, &err);
+	d_bias2    = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , sizeof(DTYPE)*plenet5->conv2.nOutputs,plenet5->conv2.pBias, &err);
+	d_pool2    = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_pool2*plenet5->pool2.nMaps, NULL, &err);
+	d_weights1 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(DTYPE)*plenet5->ip1.nInputs*plenet5->ip1.nOutputs, plenet5->ip1.pWeights, &err);
+	d_output1  = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(DTYPE)*plenet5->ip1.nOutputs, NULL, &err);
+	d_cbias1   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , sizeof(DTYPE)*plenet5->ip1.nOutputs, plenet5->ip1.pBias, &err);
+	d_weights2 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , sizeof(DTYPE)*plenet5->ip2.nInputs*plenet5->ip2.nOutputs, plenet5->ip2.pWeights, &err);
+	d_output   = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(DTYPE)*plenet5->ip2.nOutputs, NULL, &err);
+	d_cbias2   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , sizeof(DTYPE)*plenet5->ip2.nOutputs, plenet5->ip2.pBias, &err);
+
 	if (!d_image || !d_filter1 || !d_conv1 || !d_bias1 || !d_pool1 || !d_filter2 || !d_conv2 || !d_bias2 || !d_pool2 || !d_weights1 || !d_output1 || !d_cbias1 || !d_weights2 || !d_output|| !d_cbias2 )
-       {
-          printf("Error: Failed to allocate device memory!\n");
-          exit(1);
-       }
-      return 0;
+	{
+	  printf("Error: Failed to allocate device memory!\n");
+	  exit(1);
+	}
+	return 0;
 }
 
 int FreeDeviceData()
 {
-    clReleaseMemObject(d_cbias1);
-    clReleaseMemObject(d_cbias2);
-    clReleaseMemObject(d_weights1);
-    clReleaseMemObject(d_pool2);
-    clReleaseMemObject(d_conv2);
-    clReleaseMemObject(d_pool1);
-    clReleaseMemObject(d_conv1);
-    clReleaseMemObject(d_image);
-    clReleaseMemObject(d_filter1);
-    clReleaseMemObject(d_bias1);
-    clReleaseMemObject(d_output1);
-    clReleaseMemObject(d_output);
-    clReleaseMemObject(d_bias2);
-    clReleaseMemObject(d_weights2);
+	clReleaseMemObject(d_cbias1);
+	clReleaseMemObject(d_cbias2);
+	clReleaseMemObject(d_weights1);
+	clReleaseMemObject(d_pool2);
+	clReleaseMemObject(d_conv2);
+	clReleaseMemObject(d_pool1);
+	clReleaseMemObject(d_conv1);
+	clReleaseMemObject(d_image);
+	clReleaseMemObject(d_filter1);
+	clReleaseMemObject(d_bias1);
+	clReleaseMemObject(d_output1);
+	clReleaseMemObject(d_output);
+	clReleaseMemObject(d_bias2);
+	clReleaseMemObject(d_weights2);
 
-    return 0;
+	return 0;
 }
 
 int FreeDeviceProg()
 {
-    clReleaseProgram(program);
-    clReleaseKernel(kernel[0]);
-    clReleaseKernel(kernel[1]);
-    clReleaseKernel(kernel[2]);
-    clReleaseKernel(kernel[3]);
-    clReleaseKernel(kernel[4]);
-    clReleaseCommandQueue(commands);
-    clReleaseContext(context);
+	clReleaseProgram(program);
+	clReleaseKernel(kernel[0]);
+	clReleaseKernel(kernel[1]);
+	clReleaseKernel(kernel[2]);
+	clReleaseKernel(kernel[3]);
+	clReleaseKernel(kernel[4]);
+	clReleaseCommandQueue(commands);
+	clReleaseContext(context);
 
-    return 0;
+	return 0;
 }
 
-int main(int argc, char **argv) {
+int lenet5App(lenet5 *plenet5)
+{
 
+	cl_event event[8];
+	int err=0;
+	register long long int ptimer1=0;
+	register long long int ptimer2=0;
+
+	//Launch OpenCL kernel
+	size_t local[3],global[3];
+	local[0] = 1;
+	local[1] = 1;
+	local[2] = 1;
+
+	err  = clSetKernelArg(kernel[0], 0, sizeof(cl_mem), (void *)&d_image);
+	err |= clSetKernelArg(kernel[0], 1, sizeof(cl_mem), (void *)&d_filter1);
+	err |= clSetKernelArg(kernel[0], 2, sizeof(cl_mem), (void *)&d_conv1);
+	err |= clSetKernelArg(kernel[0], 3, sizeof(int), (void *)&plenet5->conv1.nFilW);
+	err |= clSetKernelArg(kernel[0], 4, sizeof(int), (void *)&plenet5->conv1.nFilH);
+	err |= clSetKernelArg(kernel[0], 5, sizeof(int), (void *)&plenet5->conv1.nInputs);
+	err |= clSetKernelArg(kernel[0], 6, sizeof(cl_mem), (void*)&d_bias1);
+
+	if (err != CL_SUCCESS)
+	{
+	printf("Error: Failed to set kernel arguments! %d\n", err);	
+	exit(1);
+	}
+
+
+	global[0] = plenet5->conv1.oW;
+	global[1] = plenet5->conv1.oH;
+	global[2] = plenet5->conv1.nOutputs;
+
+	/*Enqueue task for parallel execution*/
+	err = clEnqueueNDRangeKernel(commands, kernel[0], 3, NULL, global, local, 0, NULL, &event[0]);
+	if (err != CL_SUCCESS)
+	{
+	if(err == CL_INVALID_WORK_ITEM_SIZE)
+		printf("CL_INVALID_WORK_ITEM_SIZE \n");
+	if(err == CL_INVALID_WORK_GROUP_SIZE)
+		printf("CL_INVALID_WORK_GROUP_SIZE \n");
+	printf("Error: Failed to execute kernel! %d\n", err);
+	exit(1);
+	}
+
+	err  = clSetKernelArg(kernel[1], 0, sizeof(cl_mem), (void *)&d_conv1);
+	err |= clSetKernelArg(kernel[1], 1, sizeof(cl_mem), (void *)&d_pool1);
+	err |= clSetKernelArg(kernel[1], 2, sizeof(int), (void *)&plenet5->conv1.oW);
+	err |= clSetKernelArg(kernel[1], 3, sizeof(int), (void *)&plenet5->conv1.oH);
+	err |= clSetKernelArg(kernel[1], 4, sizeof(int), (void *)&plenet5->pool1.nPoolSize);
+	err |= clSetKernelArg(kernel[1], 5, sizeof(int), (void *)&plenet5->pool1.nStride);
+
+	if (err != CL_SUCCESS) {
+	printf("Error: Failed to set kernel arguments! %d\n", err);
+	exit(1);
+	   }
+
+	global[0] = plenet5->pool1.oW;
+	global[1] = plenet5->pool1.oH;
+	global[2] = plenet5->pool1.nMaps;
+
+
+	/*Enqueue task for parallel execution*/
+	err = clEnqueueNDRangeKernel(commands, kernel[1], 3, NULL, global, local, 1, &event[0], &event[1]);
+	if (err != CL_SUCCESS)
+	{
+	if(err == CL_INVALID_WORK_ITEM_SIZE)
+	printf("CL_INVALID_WORK_ITEM_SIZE \n");
+	if(err == CL_INVALID_WORK_GROUP_SIZE)
+		printf("CL_INVALID_WORK_GROUP_SIZE \n");
+	printf("Error: Failed to execute kernel! %d\n", err);
+	exit(1);
+	}
+
+	err  = clSetKernelArg(kernel[0], 0, sizeof(cl_mem), (void *)&d_pool1);
+	err |= clSetKernelArg(kernel[0], 1, sizeof(cl_mem), (void *)&d_filter2);
+	err |= clSetKernelArg(kernel[0], 2, sizeof(cl_mem), (void *)&d_conv2);
+	err |= clSetKernelArg(kernel[0], 3, sizeof(int), (void *)&plenet5->conv2.nFilW);
+	err |= clSetKernelArg(kernel[0], 4, sizeof(int), (void *)&plenet5->conv2.nFilH);
+	err |= clSetKernelArg(kernel[0], 5, sizeof(int), (void *)&plenet5->conv2.nInputs);
+	err |= clSetKernelArg(kernel[0], 6, sizeof(cl_mem), (void*)&d_bias2);
+
+	if (err != CL_SUCCESS) {
+	printf("Error: Failed to set kernel arguments! %d\n", err);
+	exit(1);
+	   }
+
+	global[0] = plenet5->conv2.oW;
+	global[1] = plenet5->conv2.oH;
+	global[2] = plenet5->conv2.nOutputs;
+
+	/*Enqueue task for parallel execution*/
+	err = clEnqueueNDRangeKernel(commands, kernel[0], 3, NULL, global, local, 1, &event[1], &event[2]);
+	if (err != CL_SUCCESS)
+	{
+	if(err == CL_INVALID_WORK_ITEM_SIZE)
+		printf("CL_INVALID_WORK_ITEM_SIZE \n");
+	if(err == CL_INVALID_WORK_GROUP_SIZE)
+		printf("CL_INVALID_WORK_GROUP_SIZE \n");
+	printf("Error: Failed to execute kernel! %d \n", err);
+	exit(1);
+	}
+
+	err  = clSetKernelArg(kernel[1], 0, sizeof(cl_mem), (void *)&d_conv2);
+	err |= clSetKernelArg(kernel[1], 1, sizeof(cl_mem), (void *)&d_pool2);
+	err |= clSetKernelArg(kernel[1], 2, sizeof(int), (void *)&plenet5->conv2.oW);
+	err |= clSetKernelArg(kernel[1], 3, sizeof(int), (void *)&plenet5->conv2.oH);
+	err |= clSetKernelArg(kernel[1], 4, sizeof(int), (void *)&plenet5->pool2.nPoolSize);
+	err |= clSetKernelArg(kernel[1], 5, sizeof(int), (void *)&plenet5->pool2.nStride);
+
+	if (err != CL_SUCCESS) {
+	printf("Error: Failed to set kernel arguments! %d\n", err);
+	exit(1);
+	   }
+
+	global[0] = plenet5->pool2.oW;
+	global[1] = plenet5->pool2.oH;
+	global[2] = plenet5->pool2.nMaps;
+
+
+	/*Enqueue task for parallel execution*/
+	err = clEnqueueNDRangeKernel(commands, kernel[1], 3, NULL, global, local, 1, &event[2], &event[3]);
+	if (err != CL_SUCCESS)
+	{
+	if(err == CL_INVALID_WORK_ITEM_SIZE)
+	printf("CL_INVALID_WORK_ITEM_SIZE \n");
+	if(err == CL_INVALID_WORK_GROUP_SIZE)
+		printf("CL_INVALID_WORK_GROUP_SIZE \n");
+	printf("Error: Failed to execute kernel! %d\n", err);
+	exit(1);
+	}
+
+	err  = clSetKernelArg(kernel[2], 0, sizeof(cl_mem), (void *)&d_pool2);
+	err |= clSetKernelArg(kernel[2], 1, sizeof(cl_mem), (void *)&d_weights1);
+	err |= clSetKernelArg(kernel[2], 2, sizeof(cl_mem), (void *)&d_output1);
+	err |= clSetKernelArg(kernel[2], 3, sizeof(int), (void *)&plenet5->ip1.nInputs);
+	err |= clSetKernelArg(kernel[2], 4, sizeof(cl_mem), (void*)&d_cbias1);
+
+
+	if (err != CL_SUCCESS) {
+	printf("Error: Failed to set kernel arguments! %d\n", err);
+	exit(1);
+	   }
+
+	size_t ip_local  = 2;
+	size_t ip_global = plenet5->ip1.nOutputs;
+
+	ptimer1 = PAPI_get_virt_usec();
+	/*Enqueue task for parallel execution*/
+	err = clEnqueueNDRangeKernel(commands, kernel[2], 1, NULL, &ip_global, &ip_local, 1, &event[3], &event[4]);
+	if (err != CL_SUCCESS)
+	{
+	printf("Error: Failed to execute kernel! %d \n", err);
+	exit(1);
+	}
+
+	err = clSetKernelArg(kernel[3], 0, sizeof(cl_mem), (void*)&d_output1);
+	if (err != CL_SUCCESS) {
+	printf("Error: Failed to set kernel arguments! %d\n", err);
+	exit(1);
+	}
+
+	err = clEnqueueNDRangeKernel(commands,kernel[3],1,NULL,&ip_global,&ip_local,1,&event[4], &event[5]);
+	if(err!= CL_SUCCESS)
+	{
+	printf("Error: Failed to execute kernel %d \n", err);
+	exit(1);
+	}
+
+	err  = clSetKernelArg(kernel[2], 0, sizeof(cl_mem), (void *)&d_output1);
+	err |= clSetKernelArg(kernel[2], 1, sizeof(cl_mem), (void *)&d_weights2);
+	err |= clSetKernelArg(kernel[2], 2, sizeof(cl_mem), (void *)&d_output);
+	err |= clSetKernelArg(kernel[2], 3, sizeof(int), (void *)&plenet5->ip2.nInputs);
+	err |= clSetKernelArg(kernel[2], 4, sizeof(cl_mem), (void*)&d_cbias2);
+	if (err != CL_SUCCESS)
+	{
+	printf("Error: Failed to execute kernel! %d \n", err);
+	exit(1);
+	}
+
+	ip_global = plenet5->ip2.nOutputs;
+
+	err = clEnqueueNDRangeKernel(commands, kernel[2], 1, NULL, &ip_global, &ip_local, 1,&event[5], &event[6]);
+	if (err != CL_SUCCESS)
+	{
+	printf("Error: Failed to execute kernel! %d \n", err);
+	exit(1);
+	}
+
+	err = clSetKernelArg(kernel[4], 0, sizeof(cl_mem), (void*)&d_output);
+	if(err!= CL_SUCCESS)
+	{
+	printf("Error: Failed to execute kernel %d \n", err);
+	exit(1);
+	}
+
+	size_t smax_local = plenet5->ip2.nOutputs;
+	size_t smax_global= plenet5->ip2.nOutputs;
+
+	err = clEnqueueNDRangeKernel(commands, kernel[4], 1, NULL, &smax_global, &smax_local, 1, &event[6], &event[7]);
+	if (err != CL_SUCCESS)
+	{
+	printf("Error: Failed to execute kernel! %d \n", err);
+	exit(1);
+	}
+
+	// ptimer2 = PAPI_get_virt_usec();
+	// printf("cl:main timing:PAPI clEnqueueNDRangeKernel %llu us\n",(ptimer2-ptimer1));
+	clFinish(commands);
+	cl_ulong time_start, time_end;
+	double total_time;
+	clGetEventProfilingInfo(event[0], CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
+	clGetEventProfilingInfo(event[7], CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
+	total_time = time_end - time_start;
+	printf("cl:main timing:opencl clEnqueueNDRangeKernel %0.3f us\n", total_time / 1000.0);
+
+	err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, sizeof(DTYPE)*plenet5->ip2.nOutputs, plenet5->ip2.pOutput, 0, NULL, NULL);
+	if (err != CL_SUCCESS)
+	{
+	printf("Error: Failed to read output array! %d\n", err);
+	exit(1);
+	}
+
+	return 0;
+}
+
+int main(int argc, char **argv)
+{
+	int i=0,j =0;
         if(argc < 2) {
                 printf("Please specify the image path \n");
                 exit(1);
         }
 
-	cl_event event[8];
-	int err, i=0,j =0;
-	register long long int ptimer1=0;
-	register long long int ptimer2=0;
 	pgm_t input_pgm;
 	lenet5 olenet5;
 
@@ -437,240 +660,28 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 	
+	if(lenet5App(&olenet5))
+	{
+		printf("Error: Failed to execute APP \n");
+		exit(1);
+	}
+	
+	int idx=-1;
+	float result = -1.0;
+	printf("Output Probabilities \n");
+	for(i=0;i<IP2_NO_OUTPUTS;i++)
+	{
+	printf("%e,",olenet5.ip2.pOutput[i]);
+	if(olenet5.ip2.pOutput[i]>result)
+	{
+	   result = olenet5.ip2.pOutput[i];
+	   idx = i;
+	}
+	}
+	printf("\n");
+    	printf("The digit in the image is %d \n",idx);
 
-       	   //Launch OpenCL kernel
-       	   size_t local[3],global[3];
-       	   local[0] = 1;
-       	   local[1] = 1;
-       	   local[2] = 1;
-
-       	   err  = clSetKernelArg(kernel[0], 0, sizeof(cl_mem), (void *)&d_image);
-       	   err |= clSetKernelArg(kernel[0], 1, sizeof(cl_mem), (void *)&d_filter1);
-       	   err |= clSetKernelArg(kernel[0], 2, sizeof(cl_mem), (void *)&d_conv1);
-       	   err |= clSetKernelArg(kernel[0], 3, sizeof(int), (void *)&olenet5.conv1.nFilW);
-       	   err |= clSetKernelArg(kernel[0], 4, sizeof(int), (void *)&olenet5.conv1.nFilH);
-       	   err |= clSetKernelArg(kernel[0], 5, sizeof(int), (void *)&olenet5.conv1.nInputs);
-       	   err |= clSetKernelArg(kernel[0], 6, sizeof(cl_mem), (void*)&d_bias1);
-       	
-       	   if (err != CL_SUCCESS)
-	   {
-       	        printf("Error: Failed to set kernel arguments! %d\n", err);	
-       	        exit(1);
-           }
-
-       
-       	   global[0] = olenet5.conv1.oW;
-       	   global[1] = olenet5.conv1.oH;
-       	   global[2] = olenet5.conv1.nOutputs;
-       	   
-	  /*Enqueue task for parallel execution*/
-       	   err = clEnqueueNDRangeKernel(commands, kernel[0], 3, NULL, global, local, 0, NULL, &event[0]);
-       	   if (err != CL_SUCCESS)
-       	   {
-	        if(err == CL_INVALID_WORK_ITEM_SIZE)
-	       	 	printf("CL_INVALID_WORK_ITEM_SIZE \n");
-	        if(err == CL_INVALID_WORK_GROUP_SIZE)
-	        	printf("CL_INVALID_WORK_GROUP_SIZE \n");
-	        printf("Error: Failed to execute kernel! %d\n", err);
-	        exit(1);
-	   }
-
-           err  = clSetKernelArg(kernel[1], 0, sizeof(cl_mem), (void *)&d_conv1);
-           err |= clSetKernelArg(kernel[1], 1, sizeof(cl_mem), (void *)&d_pool1);
-           err |= clSetKernelArg(kernel[1], 2, sizeof(int), (void *)&olenet5.conv1.oW);
-           err |= clSetKernelArg(kernel[1], 3, sizeof(int), (void *)&olenet5.conv1.oH);
-           err |= clSetKernelArg(kernel[1], 4, sizeof(int), (void *)&olenet5.pool1.nPoolSize);
-           err |= clSetKernelArg(kernel[1], 5, sizeof(int), (void *)&olenet5.pool1.nStride);
-
-           if (err != CL_SUCCESS) {
-                printf("Error: Failed to set kernel arguments! %d\n", err);
-                exit(1);
-                   }
-
-           global[0] = olenet5.pool1.oW;
-           global[1] = olenet5.pool1.oH;
-           global[2] = olenet5.pool1.nMaps;
-
-
-           /*Enqueue task for parallel execution*/
-           err = clEnqueueNDRangeKernel(commands, kernel[1], 3, NULL, global, local, 1, &event[0], &event[1]);
-           if (err != CL_SUCCESS)
-           {
-                if(err == CL_INVALID_WORK_ITEM_SIZE)
-                printf("CL_INVALID_WORK_ITEM_SIZE \n");
-                if(err == CL_INVALID_WORK_GROUP_SIZE)
-                        printf("CL_INVALID_WORK_GROUP_SIZE \n");
-                printf("Error: Failed to execute kernel! %d\n", err);
-                exit(1);
-	   }
-
-           err  = clSetKernelArg(kernel[0], 0, sizeof(cl_mem), (void *)&d_pool1);
-           err |= clSetKernelArg(kernel[0], 1, sizeof(cl_mem), (void *)&d_filter2);
-           err |= clSetKernelArg(kernel[0], 2, sizeof(cl_mem), (void *)&d_conv2);
-           err |= clSetKernelArg(kernel[0], 3, sizeof(int), (void *)&olenet5.conv2.nFilW);
-           err |= clSetKernelArg(kernel[0], 4, sizeof(int), (void *)&olenet5.conv2.nFilH);
-           err |= clSetKernelArg(kernel[0], 5, sizeof(int), (void *)&olenet5.conv2.nInputs);
-           err |= clSetKernelArg(kernel[0], 6, sizeof(cl_mem), (void*)&d_bias2);
-
-           if (err != CL_SUCCESS) {
-                printf("Error: Failed to set kernel arguments! %d\n", err);
-                exit(1);
-                   }
-
-           global[0] = olenet5.conv2.oW;
-           global[1] = olenet5.conv2.oH;
-           global[2] = olenet5.conv2.nOutputs;
-
-           /*Enqueue task for parallel execution*/
-           err = clEnqueueNDRangeKernel(commands, kernel[0], 3, NULL, global, local, 1, &event[1], &event[2]);
-           if (err != CL_SUCCESS)
-           {
-                if(err == CL_INVALID_WORK_ITEM_SIZE)
-                        printf("CL_INVALID_WORK_ITEM_SIZE \n");
-                if(err == CL_INVALID_WORK_GROUP_SIZE)
-                        printf("CL_INVALID_WORK_GROUP_SIZE \n");
-                printf("Error: Failed to execute kernel! %d \n", err);
-                exit(1);
-           }
-
-           err  = clSetKernelArg(kernel[1], 0, sizeof(cl_mem), (void *)&d_conv2);
-           err |= clSetKernelArg(kernel[1], 1, sizeof(cl_mem), (void *)&d_pool2);
-           err |= clSetKernelArg(kernel[1], 2, sizeof(int), (void *)&olenet5.conv2.oW);
-           err |= clSetKernelArg(kernel[1], 3, sizeof(int), (void *)&olenet5.conv2.oH);
-           err |= clSetKernelArg(kernel[1], 4, sizeof(int), (void *)&olenet5.pool2.nPoolSize);
-           err |= clSetKernelArg(kernel[1], 5, sizeof(int), (void *)&olenet5.pool2.nStride);
-
-           if (err != CL_SUCCESS) {
-                printf("Error: Failed to set kernel arguments! %d\n", err);
-                exit(1);
-                   }
-
-           global[0] = olenet5.pool2.oW;
-           global[1] = olenet5.pool2.oH;
-           global[2] = olenet5.pool2.nMaps;
-
-
-           /*Enqueue task for parallel execution*/
-           err = clEnqueueNDRangeKernel(commands, kernel[1], 3, NULL, global, local, 1, &event[2], &event[3]);
-           if (err != CL_SUCCESS)
-           {
-                if(err == CL_INVALID_WORK_ITEM_SIZE)
-                printf("CL_INVALID_WORK_ITEM_SIZE \n");
-                if(err == CL_INVALID_WORK_GROUP_SIZE)
-                        printf("CL_INVALID_WORK_GROUP_SIZE \n");
-                printf("Error: Failed to execute kernel! %d\n", err);
-                exit(1);
-           }
-
-           err  = clSetKernelArg(kernel[2], 0, sizeof(cl_mem), (void *)&d_pool2);
-           err |= clSetKernelArg(kernel[2], 1, sizeof(cl_mem), (void *)&d_weights1);
-           err |= clSetKernelArg(kernel[2], 2, sizeof(cl_mem), (void *)&d_output1);
-           err |= clSetKernelArg(kernel[2], 3, sizeof(int), (void *)&olenet5.ip1.nInputs);
-           err |= clSetKernelArg(kernel[2], 4, sizeof(cl_mem), (void*)&d_cbias1);
-
-
-           if (err != CL_SUCCESS) {
-                printf("Error: Failed to set kernel arguments! %d\n", err);
-                exit(1);
-                   }
-
-          size_t ip_local  = 2;
-          size_t ip_global = olenet5.ip1.nOutputs;
-
-           ptimer1 = PAPI_get_virt_usec();
-           /*Enqueue task for parallel execution*/
-           err = clEnqueueNDRangeKernel(commands, kernel[2], 1, NULL, &ip_global, &ip_local, 1, &event[3], &event[4]);
-           if (err != CL_SUCCESS)
-           {
-                printf("Error: Failed to execute kernel! %d \n", err);
-                exit(1);
-           }
-
-           err = clSetKernelArg(kernel[3], 0, sizeof(cl_mem), (void*)&d_output1);
-           if (err != CL_SUCCESS) {
-                printf("Error: Failed to set kernel arguments! %d\n", err);
-                exit(1);
-	   }
-
-           err = clEnqueueNDRangeKernel(commands,kernel[3],1,NULL,&ip_global,&ip_local,1,&event[4], &event[5]);
-           if(err!= CL_SUCCESS)
-           {
-                printf("Error: Failed to execute kernel %d \n", err);
-                exit(1);
-           }
-
-           err  = clSetKernelArg(kernel[2], 0, sizeof(cl_mem), (void *)&d_output1);
-           err |= clSetKernelArg(kernel[2], 1, sizeof(cl_mem), (void *)&d_weights2);
-           err |= clSetKernelArg(kernel[2], 2, sizeof(cl_mem), (void *)&d_output);
-           err |= clSetKernelArg(kernel[2], 3, sizeof(int), (void *)&olenet5.ip2.nInputs);
-           err |= clSetKernelArg(kernel[2], 4, sizeof(cl_mem), (void*)&d_cbias2);
-           if (err != CL_SUCCESS)
-           {
-                printf("Error: Failed to execute kernel! %d \n", err);
-                exit(1);
-           }
-
-           ip_global = olenet5.ip2.nOutputs;
-
-           err = clEnqueueNDRangeKernel(commands, kernel[2], 1, NULL, &ip_global, &ip_local, 1,&event[5], &event[6]);
-           if (err != CL_SUCCESS)
-           {
-                printf("Error: Failed to execute kernel! %d \n", err);
-                exit(1);
-           }
-
-           err = clSetKernelArg(kernel[4], 0, sizeof(cl_mem), (void*)&d_output);
-           if(err!= CL_SUCCESS)
-           {
-                printf("Error: Failed to execute kernel %d \n", err);
-                exit(1);
-	   }
-
-           size_t smax_local = olenet5.ip2.nOutputs;
-           size_t smax_global= olenet5.ip2.nOutputs;
-
-           err = clEnqueueNDRangeKernel(commands, kernel[4], 1, NULL, &smax_global, &smax_local, 1, &event[6], &event[7]);
-           if (err != CL_SUCCESS)
-           {
-                printf("Error: Failed to execute kernel! %d \n", err);
-                exit(1);
-           }
-
-          // ptimer2 = PAPI_get_virt_usec();
-          // printf("cl:main timing:PAPI clEnqueueNDRangeKernel %llu us\n",(ptimer2-ptimer1));
-           clFinish(commands);
-           cl_ulong time_start, time_end;
-           double total_time;
-           clGetEventProfilingInfo(event[0], CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
-           clGetEventProfilingInfo(event[7], CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
-           total_time = time_end - time_start;
-           printf("cl:main timing:opencl clEnqueueNDRangeKernel %0.3f us\n", total_time / 1000.0);
-
-           err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, sizeof(DTYPE)*olenet5.ip2.nOutputs, olenet5.ip2.pOutput, 0, NULL, NULL);
-           if (err != CL_SUCCESS)
-           {
-                printf("Error: Failed to read output array! %d\n", err);
-                exit(1);
-           }
-
-           int idx=-1;
-           float result = -1.0;
-           printf("Output Probabilities \n");
-           for(i=0;i<IP2_NO_OUTPUTS;i++)
-           {
-                printf("%e,",olenet5.ip2.pOutput[i]);
-                if(olenet5.ip2.pOutput[i]>result)
-                {
-                   result = olenet5.ip2.pOutput[i];
-                   idx = i;
-                }
-           }
-           printf("\n");
-
-
-    printf("The digit in the image is %d \n",idx);
-
-    destroyPGM(&input_pgm);
+    	destroyPGM(&input_pgm);
 	
 	if (FreeDeviceData())
 	{
