@@ -12,12 +12,17 @@
 
 typedef float DTYPE;
 
-int main()
-{
+int main(int argc, char **argv) {
+
+        if(argc < 2) {
+                printf("Please specify the image path \n");
+                exit(1);
+        }
+
 	cl_event event[8];
 	int err, i=0,j =0, stride=STRIDE,poolsize=POOL_SIZE;
-	register long long ptimer1=0;
-	register long long ptimer2=0;
+	register long long int ptimer1=0;
+	register long long int ptimer2=0;
         pgm_t input_pgm;
 
         int ipgm_img_width,conv1_width,l1_width,conv2_width,l2_width;
@@ -42,7 +47,7 @@ int main()
         unsigned int size_output = 1;
         unsigned int mem_size_output = sizeof(DTYPE) * size_output;
 
-	readPGM(&input_pgm,"../../imgs/mnist_test_img_0.pgm");
+	readPGM(&input_pgm,argv[1]);
 	ipgm_img_width  = input_pgm.width;
 	ipgm_img_height = input_pgm.height;
 	printf("cl:main program:img_width %d\n", ipgm_img_width);
@@ -124,15 +129,25 @@ int main()
 	cl_platform_id platform_ids[5];
 	
 	clGetPlatformIDs(dev_cnt, platform_ids, NULL);
+
 	for(i=0;i<dev_cnt;i++)
 	{
 #ifdef DEVICE_GPU
 	   err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_GPU, 1, &device_id, NULL);
+#elif DEVICE_ACC
+	   err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_ACCELERATOR, 1, &device_id, NULL);
 #else
 	   err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_CPU, 1, &device_id, NULL);
 #endif
 	   if(err == CL_SUCCESS)
+	   {
+		char name[100],vendor[100],version[100];
+		clGetPlatformInfo(platform_ids[i],CL_PLATFORM_NAME,sizeof(name),&name[0],NULL);
+		clGetPlatformInfo(platform_ids[i],CL_PLATFORM_VENDOR,sizeof(vendor),&vendor[0],NULL);
+		clGetPlatformInfo(platform_ids[i],CL_PLATFORM_VERSION,sizeof(version),&version[0],NULL);
+		printf("Using Platform %s from vendor %s \n Opencl Version Implemented is %s \n",name,vendor,version);
 		break;
+	   }
 	}
 	if (err != CL_SUCCESS)
 	{
@@ -546,7 +561,7 @@ int main()
            clReleaseMemObject(d_output1);
            clReleaseMemObject(d_output);
            clReleaseMemObject(d_bias2);
-           clReleaseMemObject(d_bias2);
+           clReleaseMemObject(d_weights2);
 
 	   clReleaseProgram(program);
 	   clReleaseKernel(kernel[0]);
