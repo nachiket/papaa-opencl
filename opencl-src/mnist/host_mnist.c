@@ -385,7 +385,7 @@ int FreeDeviceProg()
 int lenet5App(lenet5 *plenet5, int label)
 {
 
-	cl_event event[8];
+	cl_event event[9];
 	int err=0,i=0;
 	int idx=-1;
 	float result = -1.0;
@@ -393,10 +393,9 @@ int lenet5App(lenet5 *plenet5, int label)
 	register long long int ptimer2=0;
 
 	//Launch OpenCL kernel
-	size_t local[3],global[3];
-	local[0] = 1;
-	local[1] = 1;
-	local[2] = 1;
+	size_t global[3];
+
+	ptimer1 = PAPI_get_virt_usec();
 
 	err  = clSetKernelArg(kernel[0], 0, sizeof(cl_mem), (void *)&d_image);
 	err |= clSetKernelArg(kernel[0], 1, sizeof(cl_mem), (void *)&d_filter1);
@@ -418,7 +417,7 @@ int lenet5App(lenet5 *plenet5, int label)
 	global[2] = plenet5->conv1.nOutputs;
 
 	/*Enqueue task for parallel execution*/
-	err = clEnqueueNDRangeKernel(commands, kernel[0], 3, NULL, global, local, 0, NULL, &event[0]);
+	err = clEnqueueNDRangeKernel(commands, kernel[0], 3, NULL, global, NULL, 0, NULL, &event[0]);
 	if (err != CL_SUCCESS)
 	{
 		if(err == CL_INVALID_WORK_ITEM_SIZE)
@@ -448,7 +447,7 @@ int lenet5App(lenet5 *plenet5, int label)
 
 
 	/*Enqueue task for parallel execution*/
-	err = clEnqueueNDRangeKernel(commands, kernel[1], 3, NULL, global, local, 1, &event[0], &event[1]);
+	err = clEnqueueNDRangeKernel(commands, kernel[1], 3, NULL, global, NULL, 1, &event[0], &event[1]);
 	if (err != CL_SUCCESS)
 	{
 		if(err == CL_INVALID_WORK_ITEM_SIZE)
@@ -478,7 +477,7 @@ int lenet5App(lenet5 *plenet5, int label)
 	global[2] = plenet5->conv2.nOutputs;
 
 	/*Enqueue task for parallel execution*/
-	err = clEnqueueNDRangeKernel(commands, kernel[0], 3, NULL, global, local, 1, &event[1], &event[2]);
+	err = clEnqueueNDRangeKernel(commands, kernel[0], 3, NULL, global, NULL, 1, &event[1], &event[2]);
 	if (err != CL_SUCCESS)
 	{
 		if(err == CL_INVALID_WORK_ITEM_SIZE)
@@ -508,7 +507,7 @@ int lenet5App(lenet5 *plenet5, int label)
 
 
 	/*Enqueue task for parallel execution*/
-	err = clEnqueueNDRangeKernel(commands, kernel[1], 3, NULL, global, local, 1, &event[2], &event[3]);
+	err = clEnqueueNDRangeKernel(commands, kernel[1], 3, NULL, global, NULL, 1, &event[2], &event[3]);
 	if (err != CL_SUCCESS)
 	{
 		if(err == CL_INVALID_WORK_ITEM_SIZE)
@@ -532,12 +531,10 @@ int lenet5App(lenet5 *plenet5, int label)
 		exit(1);
 	}
 
-	size_t ip_local  = 2;
 	size_t ip_global = plenet5->ip1.nOutputs;
 
-	ptimer1 = PAPI_get_virt_usec();
 	/*Enqueue task for parallel execution*/
-	err = clEnqueueNDRangeKernel(commands, kernel[2], 1, NULL, &ip_global, &ip_local, 1, &event[3], &event[4]);
+	err = clEnqueueNDRangeKernel(commands, kernel[2], 1, NULL, &ip_global, NULL, 1, &event[3], &event[4]);
 	if (err != CL_SUCCESS)
 	{
 		printf("Error: Failed to execute kernel! %d \n", err);
@@ -551,7 +548,7 @@ int lenet5App(lenet5 *plenet5, int label)
 		exit(1);
 	}
 
-	err = clEnqueueNDRangeKernel(commands,kernel[3],1,NULL,&ip_global,&ip_local,1,&event[4], &event[5]);
+	err = clEnqueueNDRangeKernel(commands,kernel[3],1,NULL,&ip_global,NULL,1,&event[4], &event[5]);
 	if(err!= CL_SUCCESS)
 	{
 		printf("Error: Failed to execute kernel %d \n", err);
@@ -571,7 +568,7 @@ int lenet5App(lenet5 *plenet5, int label)
 
 	ip_global = plenet5->ip2.nOutputs;
 
-	err = clEnqueueNDRangeKernel(commands, kernel[2], 1, NULL, &ip_global, &ip_local, 1,&event[5], &event[6]);
+	err = clEnqueueNDRangeKernel(commands, kernel[2], 1, NULL, &ip_global, NULL, 1,&event[5], &event[6]);
 	if (err != CL_SUCCESS)
 	{
 		printf("Error: Failed to execute kernel! %d \n", err);
@@ -594,24 +591,29 @@ int lenet5App(lenet5 *plenet5, int label)
 		printf("Error: Failed to execute kernel! %d \n", err);
 		exit(1);
 	}
-
-	// ptimer2 = PAPI_get_virt_usec();
-	// printf("cl:main timing:PAPI clEnqueueNDRangeKernel %llu us\n",(ptimer2-ptimer1));
+	if(label==0xFFFF)
+	{
+		ptimer2 = PAPI_get_virt_usec();
+		printf("cl:main timing:PAPI clEnqueueNDRangeKernel %llu us\n",(ptimer2-ptimer1));
+	}
 	clFinish(commands);
-	//cl_ulong time_start, time_end;
-	//double total_time;
-	//clGetEventProfilingInfo(event[0], CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
-	//clGetEventProfilingInfo(event[7], CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
-	//total_time = time_end - time_start;
-	//printf("cl:main timing:opencl clEnqueueNDRangeKernel %0.3f us\n", total_time / 1000.0);
+	if(label == 0xFFFF)
+	{
+		cl_ulong time_start, time_end;
+		double total_time;
+		clGetEventProfilingInfo(event[0], CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
+		clGetEventProfilingInfo(event[7], CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
+		total_time = time_end - time_start;
+		printf("cl:main timing:opencl clEnqueueNDRangeKernel %0.3f us\n", total_time / 1000.0);
+	}
 
-	err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, sizeof(DTYPE)*plenet5->ip2.nOutputs, plenet5->ip2.pOutput, 0, NULL, NULL);
+	err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, sizeof(DTYPE)*plenet5->ip2.nOutputs, plenet5->ip2.pOutput, 1, &event[7], &event[8]);
 	if (err != CL_SUCCESS)
 	{
 		printf("Error: Failed to read output array! %d\n", err);
 		exit(1);
 	}
-
+	clWaitForEvents(1,&event[8]);
 	printf("%d Output Probabilities are \n",noTestImgs);
 	for(i=0;i<plenet5->ip2.nOutputs;i++)
 	{
@@ -662,7 +664,7 @@ int main(int argc, char **argv)
         }
 
         // parse arguments and decide the application mode.
-        for(int i = 1; i < argc; i++)
+        for(i = 1; i < argc; i++)
 	{
                 if(!strcmp(argv[i], "-m")) {
                         mode = argv[++i];
@@ -753,6 +755,20 @@ int main(int argc, char **argv)
 		ssize_t read;
 		int num = 0, label;
 
+		// initialize the lenet5 app
+		initApp(&olenet5,28,28);
+
+		if(InitDevice())
+		{
+			printf("Error: Device cannot be initialized \n");
+			exit(1);
+		}
+		if(BuildDeviceKernel())
+		{
+			printf("Error: Kernel Compilation error \n");
+			exit(1);
+		}
+
 		fp = fopen(imgListFile, "r");
 		if (fp == NULL)
 		{
@@ -778,11 +794,9 @@ int main(int argc, char **argv)
 			strcat(filename,imgName);
 			
 			readPGM(&input_pgm,filename);
-			ipgm_img_width  = input_pgm.width;
-			ipgm_img_height = input_pgm.height;
+			//ipgm_img_width  = input_pgm.width;
+			//ipgm_img_height = input_pgm.height;
 
-			// initialize the lenet5 app
-			initApp(&olenet5,ipgm_img_width, ipgm_img_height);
 
 			//Allocate host memory for matrices
 			if(alloc_host_memory(&olenet5))
@@ -798,18 +812,6 @@ int main(int argc, char **argv)
 			   {
 					olenet5.conv1.pInput[(i+(j*size_image))] = (DTYPE) input_pgm.buf[i]/255;
 			   }
-			}
-
-			if(InitDevice())
-			{
-				printf("Error: Device cannot be initialized \n");
-				exit(1);
-			}
-
-			if(BuildDeviceKernel())
-			{
-				printf("Error: Kernel Compilation error \n");
-				exit(1);
 			}
 
 			// Create the input and output arrays in device memory for our calculation
@@ -830,13 +832,17 @@ int main(int argc, char **argv)
 				printf("Error: Device Data memory cannot be freed \n!!");
 				exit(1);
 			}
-
-			if(FreeDeviceProg())
+			
+			if(free_host_mem (&olenet5))
 			{
-				printf("Error: Device Prog memory cannot be freed \n!!");
+				printf("Host memory cannot be freed \n !!");
 				exit(1);
-
 			}
+		}
+		if(FreeDeviceProg())
+		{
+			printf("Error: Device Prog memory cannot be freed \n!!");
+			exit(1);
 		}
 		printf("Total Number of Images tested %d\n",noTestImgs);
 		printf("Percentage Error: %f \n Number of Mispredicted images %d \n",(float)(nMisPredict/noTestImgs),nMisPredict);
