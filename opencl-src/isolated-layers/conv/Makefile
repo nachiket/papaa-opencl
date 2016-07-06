@@ -10,10 +10,10 @@ conv3Dcpu: 3Dhost.c load_kernel.c ../../../caffe-ref/scripts/gen/lenet5_model.c
 	gcc -O3 3Dhost.c load_kernel.c ../../../caffe-ref/scripts/gen/lenet5_model.c -o conv3Dcpu -lOpenCL -lpapi
 
 conv2Dgpu: 2Dhost.c load_kernel.c ../../../caffe-ref/scripts/gen/lenet5_model.c
-	gcc -DDEVICE_GPU -O3 2Dhost.c load_kernel.c ../../../caffe-ref/scripts/gen/lenet5_model.c -o conv2Dgpu -lOpenCL -lpapi
+	gcc -g -DDEVICE_GPU -O3 2Dhost.c load_kernel.c ../../../caffe-ref/scripts/gen/lenet5_model.c -o conv2Dgpu -lOpenCL -lpapi
 
 conv3Dgpu: 3Dhost.c load_kernel.c ../../../caffe-ref/scripts/gen/lenet5_model.c
-	gcc -DDEVICE_GPU -O3 3Dhost.c load_kernel.c ../../../caffe-ref/scripts/gen/lenet5_model.c -o conv3Dgpu -lOpenCL -lpapi
+	gcc -g -DDEVICE_GPU -O3 3Dhost.c load_kernel.c ../../../caffe-ref/scripts/gen/lenet5_model.c -o conv3Dgpu -lOpenCL -lpapi
 
 run:
 	./conv2Dcpu mnist_test_img_0.pgm
