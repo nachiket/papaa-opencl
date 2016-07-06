@@ -804,13 +804,21 @@ int main(int argc, char **argv)
 			   printf("Error : unable to allocate host memory!!! \n");
 			   exit(1);
 			}
-
+			
+			unsigned char max=0,min=0;
+			for(i=0;i<size_image;i++)
+			{
+				if(max<input_pgm.buf[i])
+					max = input_pgm.buf[i];
+				if(min>input_pgm.buf[i])
+					min = input_pgm.buf[i];
+			}	
 			//read input image to host buffer
 			for(j=0;j<olenet5.conv1.nInputs;j++)
 			{
 			   for(i=0;i<size_image;i++)
 			   {
-					olenet5.conv1.pInput[(i+(j*size_image))] = (DTYPE) input_pgm.buf[i]/255;
+					olenet5.conv1.pInput[(i+(j*size_image))] = (DTYPE) (input_pgm.buf[i]-min)/(max-min);
 			   }
 			}
 
@@ -845,7 +853,7 @@ int main(int argc, char **argv)
 			exit(1);
 		}
 		printf("Total Number of Images tested %d\n",noTestImgs);
-		printf("Percentage Error: %f \n Number of Mispredicted images %d \n",(float)(nMisPredict/noTestImgs),nMisPredict);
+		printf("Percentage Error: %f \n Number of Mispredicted images %d \n",(float)(nMisPredict/noTestImgs)*100,nMisPredict);
 		destroyPGM(&input_pgm);
 		fclose(fp);
 		if(line)
