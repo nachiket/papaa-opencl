@@ -17,6 +17,17 @@ typedef struct {
 	IMG_TYPE *data;
 }Mat;
 
+void print_output(float *out, int rows, int cols) {
+    int r, c;
+    for(r = 0; r < rows; r++) {
+        for(c = 0; c < cols; c++) {
+            printf("%f,", out[r*cols+c]);
+        }
+        printf("\n");
+    }
+}
+
+
 // 2D filter. This is simplified version of cv::filter2D
 void customFilter2D(const Mat &input, Mat &out, const Mat &ker, float bias) {
 	
