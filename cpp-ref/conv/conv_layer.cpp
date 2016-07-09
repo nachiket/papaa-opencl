@@ -6,26 +6,26 @@ Test case for simple 2D filter.
 
 */
 
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/opencv.hpp>
-#include <opencv2/core/core.hpp>
 #include <stdio.h>
+#include "pgm.h"
 
-using namespace cv;
-using namespace std;
+typedef float IMG_TYPE;
 
-
+typedef struct {
+	int rows;
+	int cols;
+	IMG_TYPE *data;
+}Mat;
 
 // 2D filter. This is simplified version of cv::filter2D
 void customFilter2D(const Mat &input, Mat &out, const Mat &ker) {
 	
 	for(int r = 0; r < input.rows - ker.rows + 1; r++) {
 		for(int c = 0; c < input.cols - ker.cols + 1; c++) {
-			out.at<float>(r,c) = 0;
+			out.data[r*input.rows+c] = 0;
 			for(int i = 0; i < ker.rows; i++) {
 				for(int j = 0; j < ker.cols; j++) {
-					out.at<float>(r,c) += ker.at<float>(i, j) * input.at<float>(r+i, c+j);
+					out.data[r*input.rows+c] += ker.data[i*ker.cols+j] * input.data[(r+i)*input.cols + c +j];
 				}
 			}
 		}
@@ -41,29 +41,44 @@ void print_help(char **argv) {
 int main(int argc, char **argv) {
 
 	char * imgName = NULL;
+	pgm_t inputImg, filtImg;
+
 	if(argc == 1) {
 		print_help(argv);
 		return -1;
 	}
 	imgName = argv[1];
 
-    Mat input = imread(imgName, IMREAD_GRAYSCALE);
-
+	readPGM(&inputImg, imgName);
     // Input normalization to make it in the range [0, 1], assuming the input image to be in the range [0, 255]
     Mat normInput;
-    input.convertTo(normInput, CV_32F);
-    normInput = normInput/255;
+	normInput.data = (IMG_TYPE*)malloc(inputImg.width*inputImg.height*sizeof(IMG_TYPE));
+	normInput.rows = inputImg.height;
+	normInput.cols = inputImg.width;
+
+	for(int p = 0; p < inputImg.width*inputImg.height; p++) {
+    	normInput.data[p] = (IMG_TYPE)inputImg.buf[p]/255.0;
+	}
 
 	// create a sample Guassian kernel
-    Mat kernel = Mat::ones(3, 3, CV_32F)/9.0;
-	Mat output = Mat::zeros(input.rows-kernel.rows+1, input.cols-kernel.cols+1, CV_32F);
+    Mat kernel, output;
+	const int kernelSize = 3;
+	IMG_TYPE lap_ker[kernelSize*kernelSize] = {-1.0, -1.0, -1.0, -1.0, 8.0, -1.0, -1.0, -1.0, -1.0};
+	kernel.data = lap_ker;
+	kernel.rows = kernelSize;
+	kernel.cols = kernelSize;
+	
+	output.data = (IMG_TYPE*)malloc(inputImg.width*inputImg.height*sizeof(IMG_TYPE));
+	output.rows = inputImg.height;
+	output.cols = inputImg.width;
 
 	// perform filtering
 	customFilter2D(normInput, output, kernel);
+	filtImg.width = output.cols;
+	filtImg.height = output.rows;
 
-	imshow("input image", normInput);
-	imshow("output image", output);
+	normalizeF2PGM(&filtImg, output.data);
 
-	waitKey();
+	writePGM(&filtImg, "output.pgm");
 	return 0;
 }
