@@ -18,7 +18,7 @@ typedef struct {
 }Mat;
 
 // 2D filter. This is simplified version of cv::filter2D
-void customFilter2D(const Mat &input, Mat &out, const Mat &ker) {
+void customFilter2D(const Mat &input, Mat &out, const Mat &ker, float bias) {
 	
 	for(int r = 0; r < input.rows - ker.rows + 1; r++) {
 		for(int c = 0; c < input.cols - ker.cols + 1; c++) {
@@ -28,6 +28,7 @@ void customFilter2D(const Mat &input, Mat &out, const Mat &ker) {
 					out.data[r*input.rows+c] += ker.data[i*ker.cols+j] * input.data[(r+i)*input.cols + c +j];
 				}
 			}
+			out.data[r*input.rows+c] += bias;
 		}
 	}
 }
@@ -73,7 +74,8 @@ int main(int argc, char **argv) {
 	output.cols = inputImg.width;
 
 	// perform filtering
-	customFilter2D(normInput, output, kernel);
+	float bias = 0.01;
+	customFilter2D(normInput, output, kernel, bias);
 	filtImg.width = output.cols;
 	filtImg.height = output.rows;
 
