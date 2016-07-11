@@ -44,13 +44,16 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <CL/opencl.h>
-#include "pgm.h"
+
 ////////////////////////////////////////////////////////////////////////////////
 
 #define FILTER_SIZE    (3)
+#define IMAGE_HEIGHT   (10)
+#define IMAGE_WIDTH    (10)
+#define NUM_WORKGROUPS_0 (IMAGE_WIDTH)
+#define NUM_WORKGROUPS_1 (IMAGE_HEIGHT)
 #define WORKGROUP_SIZE_0 (1)
 #define WORKGROUP_SIZE_1 (1)
-typedef int IMG_DTYPE;
 ////////////////////////////////////////////////////////////////////////////////
 
 int
@@ -89,12 +92,11 @@ int main(int argc, char** argv)
 {
     int err;                            // error code returned from api calls
     int test_fail = 0;
-    pgm_t input_img, output_img;
 
-    IMG_DTYPE filter[FILTER_SIZE*FILTER_SIZE] = {-1, -1, -1, -1, 8, -1, -1, -1, -1};
-    IMG_DTYPE *h_input;      // input image buffer
-    IMG_DTYPE *hw_output;    // host buffer for device output
-    IMG_DTYPE *sw_output;    // host buffer for reference output
+    int filter[FILTER_SIZE*FILTER_SIZE] = {-1, -1, -1, -1, 8, -1, -1, -1, -1};
+    int h_input[IMAGE_HEIGHT*IMAGE_WIDTH];      // input image buffer
+    int hw_output[IMAGE_HEIGHT*IMAGE_WIDTH];    // host buffer for device output
+    int sw_output[IMAGE_HEIGHT*IMAGE_WIDTH];    // host buffer for reference output
 
     size_t global[2];                   // global domain size for our calculation
     size_t local[2];                    // local domain size for our calculation
@@ -113,27 +115,19 @@ int main(int argc, char** argv)
     cl_mem d_in_filter;                 // device buffer for filter kernel
     cl_mem d_out_image;                 // device buffer for filtered image
 
-    printf("Application start\n");
-    if (argc != 3) {
-        printf("Usage: %s conv_2d.xclbin image_path/image_name.pgm\n", argv[0]);
+
+    if (argc != 2) {
+        printf("Usage: %s conv_2d.xclbin\n", argv[0]);
         return EXIT_FAILURE;
     }
 
-    int row, col, pix;
-    // read the image and initialize the host buffer with that
-    err = readPGM(&input_img, argv[2]);
-    if(err < 0) {
-        printf("Cound not read the image\n");
-        return EXIT_FAILURE;
+    int row, col;
+    // initialize the image buffer to some known pattern
+    for(row = 0; row < IMAGE_HEIGHT; row++) {
+        for(col = 0; col < IMAGE_WIDTH; col++) {
+            h_input[row*IMAGE_WIDTH+col] = row;
+        }
     }
-    printf("Input image resolution = %xx%d\n", input_img.width, input_img.height);
-    h_input = (IMG_DTYPE*)malloc(sizeof(IMG_DTYPE)*input_img.height*input_img.width); 
-    hw_output = (IMG_DTYPE*)malloc(sizeof(IMG_DTYPE)*input_img.height*input_img.width); 
-    sw_output = (IMG_DTYPE*)malloc(sizeof(IMG_DTYPE)*input_img.height*input_img.width); 
-    for(pix = 0; pix < input_img.height*input_img.width; pix++) {
-        h_input[pix] = input_img.buf[pix];
-    }
-
     // Connect to first platform
     //
     err = clGetPlatformIDs(1,&platform_id,NULL);
@@ -240,9 +234,9 @@ int main(int argc, char** argv)
 
     // Create the input and output arrays in device memory for our calculation
     //
-    d_in_image = clCreateBuffer(context,  CL_MEM_READ_ONLY,  sizeof(IMG_DTYPE) * input_img.height*input_img.width, NULL, NULL);
-    d_in_filter = clCreateBuffer(context,  CL_MEM_READ_ONLY,  sizeof(IMG_DTYPE) * FILTER_SIZE * FILTER_SIZE, NULL, NULL);
-    d_out_image = clCreateBuffer(context, CL_MEM_WRITE_ONLY,  sizeof(IMG_DTYPE) * input_img.height*input_img.width, NULL, NULL);
+    d_in_image = clCreateBuffer(context,  CL_MEM_READ_ONLY,  sizeof(int) * IMAGE_WIDTH * IMAGE_HEIGHT, NULL, NULL);
+    d_in_filter = clCreateBuffer(context,  CL_MEM_READ_ONLY,  sizeof(int) * FILTER_SIZE * FILTER_SIZE, NULL, NULL);
+    d_out_image = clCreateBuffer(context, CL_MEM_WRITE_ONLY,  sizeof(int) * IMAGE_WIDTH * IMAGE_HEIGHT, NULL, NULL);
     if (!d_in_image || !d_in_filter || !d_out_image) {
         printf("Error: Failed to allocate device memory!\n");
         printf("Test failed\n");
@@ -251,7 +245,7 @@ int main(int argc, char** argv)
 
     // Write the image from host buffer to device memory
     //
-    err = clEnqueueWriteBuffer(commands, d_in_image, CL_TRUE, 0, sizeof(IMG_DTYPE) * input_img.height*input_img.width, h_input, 0, NULL, NULL);
+    err = clEnqueueWriteBuffer(commands, d_in_image, CL_TRUE, 0, sizeof(int) * IMAGE_WIDTH * IMAGE_HEIGHT, h_input, 0, NULL, NULL);
     if (err != CL_SUCCESS) {
         printf("Error: Failed to write to image to device memory!\n");
         printf("Test failed\n");
@@ -259,7 +253,7 @@ int main(int argc, char** argv)
     }
     // Write filter kernel into device buffer
     //
-    err = clEnqueueWriteBuffer(commands, d_in_filter, CL_TRUE, 0, sizeof(IMG_DTYPE) * FILTER_SIZE * FILTER_SIZE, filter, 0, NULL, NULL);
+    err = clEnqueueWriteBuffer(commands, d_in_filter, CL_TRUE, 0, sizeof(int) * FILTER_SIZE * FILTER_SIZE, filter, 0, NULL, NULL);
     if (err != CL_SUCCESS) {
         printf("Error: Failed to write to filter coeff into device memory!\n");
         printf("Test failed\n");
@@ -283,8 +277,8 @@ int main(int argc, char** argv)
     }
 
     // Launch computation kernel
-    global[0] = input_img.width * WORKGROUP_SIZE_0;
-    global[1] = input_img.height * WORKGROUP_SIZE_1;
+    global[0] = NUM_WORKGROUPS_0 * WORKGROUP_SIZE_0;
+    global[1] = NUM_WORKGROUPS_1 * WORKGROUP_SIZE_1;
     local[0] = WORKGROUP_SIZE_0;
     local[1] = WORKGROUP_SIZE_1;
 
@@ -299,7 +293,7 @@ int main(int argc, char** argv)
     // Read back the results from the device to verify the output
     //
     cl_event readevent;
-    err = clEnqueueReadBuffer( commands, d_out_image, CL_TRUE, 0, sizeof(IMG_DTYPE) * input_img.width*input_img.height, hw_output, 0, NULL, &readevent
+    err = clEnqueueReadBuffer( commands, d_out_image, CL_TRUE, 0, sizeof(int) * IMAGE_WIDTH * IMAGE_HEIGHT, hw_output, 0, NULL, &readevent
 );
     if (err != CL_SUCCESS) {
             printf("Error: Failed to read output array! %d\n", err);
@@ -311,40 +305,44 @@ int main(int argc, char** argv)
 
     // Generate reference output
     int kr, kc;
-    IMG_DTYPE sum = 0;
-    for(row = 0; row < input_img.height-FILTER_SIZE+1; row++) {
-        for(col = 0; col < input_img.width-FILTER_SIZE+1; col++) {
+    int sum = 0;
+    for(row = 0; row < IMAGE_HEIGHT-FILTER_SIZE+1; row++) {
+        for(col = 0; col < IMAGE_WIDTH-FILTER_SIZE+1; col++) {
             sum = 0;
             for(kr = 0; kr < FILTER_SIZE; kr++) {
                 for(kc = 0; kc < FILTER_SIZE; kc++ ) {
-                    sum += (filter[kr*FILTER_SIZE + kc] * h_input[(row+kr)*input_img.width + col + kc]);
+                    sum += (filter[kr*FILTER_SIZE + kc] * h_input[(row+kr)*IMAGE_WIDTH + col + kc]);
                 }
             }
-            sw_output[row*input_img.width + col] = sum + bias;
+            sw_output[row*IMAGE_WIDTH + col] = sum + bias;
         }
     }
     // Check Results
-    for(row = 0; row < input_img.height-FILTER_SIZE+1; row++) {
-        for(col = 0; col < input_img.width-FILTER_SIZE+1; col++) {
-             if(sw_output[row*input_img.width+col] != hw_output[row*input_img.width+col]){
+    for(row = 0; row < IMAGE_HEIGHT-FILTER_SIZE+1; row++) {
+        for(col = 0; col < IMAGE_WIDTH-FILTER_SIZE+1; col++) {
+             if(sw_output[row*IMAGE_HEIGHT+col] != hw_output[row*IMAGE_HEIGHT+col]){
                  printf("Mismatch at : row = %d, col = %d, expected = %d, got = %d\n",
-                     row, col, sw_output[row*input_img.width+col], hw_output[row*input_img.width+col]);
+                     row, col, sw_output[row*IMAGE_HEIGHT+col], hw_output[row*IMAGE_HEIGHT+col]);
+                 test_fail = 1;
+             }
+        }
+    }
+    // Check Results
+    for(row = 0; row < IMAGE_HEIGHT-FILTER_SIZE+1; row++) {
+        for(col = 0; col < IMAGE_WIDTH-FILTER_SIZE+1; col++) {
+             if(sw_output[row*IMAGE_HEIGHT+col] != hw_output[row*IMAGE_HEIGHT+col]){
+                 printf("Mismatch at : row = %d, col = %d, expected = %d, got = %d\n",
+                     row, col, sw_output[row*IMAGE_HEIGHT+col], hw_output[row*IMAGE_HEIGHT+col]);
                  test_fail = 1;
              }
         }
     }
     printf("---------Input image-----------\n");
-    //print_matrix(h_input, input_img.height, input_img.width);
+    print_matrix(h_input, IMAGE_HEIGHT, IMAGE_WIDTH);
     printf("---------Reference output------\n");
-    //print_matrix(sw_output, input_img.height, input_img.width);
+    print_matrix(sw_output, IMAGE_HEIGHT, IMAGE_WIDTH);
     printf("---------OCL Kernel output-----\n");
-    //print_matrix(hw_output, input_img.height, input_img.width);
-
-    // store the output image
-    output_img.width = input_img.width;
-    output_img.height = input_img.height;
-    normalizeInt2PGM(&output_img, hw_output);
-    writePGM(&output_img, "../../../../fpga_output.pgm");
+    print_matrix(hw_output, IMAGE_HEIGHT, IMAGE_WIDTH);
     //--------------------------------------------------------------------------
     // Shutdown and cleanup
     //--------------------------------------------------------------------------
@@ -356,7 +354,6 @@ int main(int argc, char** argv)
     clReleaseCommandQueue(commands);
     clReleaseContext(context);
 
-    destroyPGM(&input_img);
     if (test_fail) {
         printf("INFO: Test failed\n");
         return EXIT_FAILURE;

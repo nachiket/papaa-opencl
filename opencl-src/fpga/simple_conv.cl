@@ -11,8 +11,8 @@ void conv_2d(
         int H = get_global_size(1);
         int K = 3;      
         // get image resolution
-        const int x = get_global_id(0); 
-        const int y = get_global_id(1);
+        int x = get_global_id(0); 
+        int y = get_global_id(1);
         //printf("OCL: Global %d, %d\n", get_global_size(0), get_global_size(1));
         //printf("OCL: Local WG : %d,, %d\n", get_local_size(0), get_local_size(1));
         int sum = 0;

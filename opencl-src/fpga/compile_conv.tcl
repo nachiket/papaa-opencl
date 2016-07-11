@@ -3,16 +3,18 @@ create_solution -name simple_conv -dir . -force
 # Target a Xilinx FPGA board
 add_device -vbnv xilinx:adm-pcie-7v3:1ddr:3.0
 
-
+#set args "bin_conv2d.xclbin ../../../../mnist_test_img_0.pgm"
+set args "bin_conv2d.xclbin ../../../../lena.pgm"
 # Host Compiler Flags
 set_property -name host_cflags -value "-g -O0 -std=c++0x -I$::env(PWD)" -objects [current_solution]
 
 # Host source files
 add_files "host_app.c"
-
+add_files "pgm.h"
+set_property file_type "c header files" [get_files "pgm.h"]
 # Kernel Definition
 create_kernel conv_2d -type clc
-add_files -kernel [get_kernels conv_2d] "simple.cl"
+add_files -kernel [get_kernels conv_2d] "simple_conv.cl"
 
 
 # Define Binary Containers
@@ -22,10 +24,10 @@ create_compute_unit -opencl_binary [get_opencl_binary bin_conv2d] -kernel [get_k
 
 # Compile the design for CPU based emulation
 compile_emulation -flow cpu
-run_emulation -flow cpu -args "bin_conv2d.xclbin"
+run_emulation -flow cpu -args $args
 
 # Create estimated resource usage and latency report
-report_estimate
+#report_estimate
 
 # Compile the design for Hardware Emulation
 #compile_emulation -flow hardware
