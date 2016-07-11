@@ -3,8 +3,8 @@ create_solution -name simple_conv -dir . -force
 # Target a Xilinx FPGA board
 add_device -vbnv xilinx:adm-pcie-7v3:1ddr:3.0
 
-#set args "bin_conv2d.xclbin ../../../../mnist_test_img_0.pgm"
-set args "bin_conv2d.xclbin ../../../../lena.pgm"
+set args "bin_conv2d.xclbin ../../../../mnist_test_img_0.pgm"
+#set args "bin_conv2d.xclbin ../../../../lena.pgm"
 # Host Compiler Flags
 set_property -name host_cflags -value "-g -O0 -std=c++0x -I$::env(PWD)" -objects [current_solution]
 
@@ -27,7 +27,7 @@ compile_emulation -flow cpu
 run_emulation -flow cpu -args $args
 
 # Create estimated resource usage and latency report
-#report_estimate
+report_estimate
 
 # Compile the design for Hardware Emulation
 #compile_emulation -flow hardware

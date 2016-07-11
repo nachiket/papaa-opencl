@@ -50,7 +50,7 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define FILTER_SIZE    (3)
 #define WORKGROUP_SIZE_0 (1)
 #define WORKGROUP_SIZE_1 (1)
-typedef int IMG_DTYPE;
+typedef float IMG_DTYPE;
 ////////////////////////////////////////////////////////////////////////////////
 
 int
@@ -269,13 +269,13 @@ int main(int argc, char** argv)
     // Set the arguments to our compute kernel
     //
     int filter_size = FILTER_SIZE;
-    int bias = 1;
+    IMG_DTYPE bias = 1;
     err = 0;
     err  = clSetKernelArg(kernel, 0, sizeof(cl_mem), &d_in_image);
     err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &d_in_filter);
     err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &d_out_image);
     //err |= clSetKernelArg(kernel, 3, sizeof(int),    &filter_size);
-    err |= clSetKernelArg(kernel, 3, sizeof(int),    &bias);
+    err |= clSetKernelArg(kernel, 3, sizeof(IMG_DTYPE),    &bias);
     if (err != CL_SUCCESS) {
         printf("Error: Failed to set kernel arguments! %d\n", err);
         printf("Test failed\n");
@@ -327,7 +327,7 @@ int main(int argc, char** argv)
     for(row = 0; row < input_img.height-FILTER_SIZE+1; row++) {
         for(col = 0; col < input_img.width-FILTER_SIZE+1; col++) {
              if(sw_output[row*input_img.width+col] != hw_output[row*input_img.width+col]){
-                 printf("Mismatch at : row = %d, col = %d, expected = %d, got = %d\n",
+                 printf("Mismatch at : row = %d, col = %d, expected = %f, got = %f\n",
                      row, col, sw_output[row*input_img.width+col], hw_output[row*input_img.width+col]);
                  test_fail = 1;
              }
@@ -343,7 +343,7 @@ int main(int argc, char** argv)
     // store the output image
     output_img.width = input_img.width;
     output_img.height = input_img.height;
-    normalizeInt2PGM(&output_img, hw_output);
+    normalizeF2PGM(&output_img, hw_output);
     writePGM(&output_img, "../../../../fpga_output.pgm");
     //--------------------------------------------------------------------------
     // Shutdown and cleanup

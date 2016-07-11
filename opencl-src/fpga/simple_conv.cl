@@ -1,10 +1,10 @@
 __kernel  __attribute__ ((reqd_work_group_size(1, 1, 1)))
 void conv_2d(
-        __global int *in,               // W*H input images
-        __constant int *filt,   // K*K filter kernel
-        __global int *out,              // W*H output images
+        __global float *in,               // W*H input images
+        __constant float *filt,   // K*K filter kernel
+        __global float *out,              // W*H output images
         //const int K,                          // filter resolution
-        const int pBias)                        // constant offset/bias
+        const float pBias)                        // constant offset/bias
 {
         // get pixel position
         int W = get_global_size(0);
@@ -13,9 +13,7 @@ void conv_2d(
         // get image resolution
         int x = get_global_id(0); 
         int y = get_global_id(1);
-        //printf("OCL: Global %d, %d\n", get_global_size(0), get_global_size(1));
-        //printf("OCL: Local WG : %d,, %d\n", get_local_size(0), get_local_size(1));
-        int sum = 0;
+        float sum = 0;
         int c = 0;
 
         // loop over rows

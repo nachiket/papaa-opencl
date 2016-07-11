@@ -320,19 +320,9 @@ int main(int argc, char** argv)
     // Check Results
     for(row = 0; row < IMAGE_HEIGHT-FILTER_SIZE+1; row++) {
         for(col = 0; col < IMAGE_WIDTH-FILTER_SIZE+1; col++) {
-             if(sw_output[row*IMAGE_HEIGHT+col] != hw_output[row*IMAGE_HEIGHT+col]){
+             if(sw_output[row*IMAGE_WIDTH+col] != hw_output[row*IMAGE_WIDTH+col]){
                  printf("Mismatch at : row = %d, col = %d, expected = %d, got = %d\n",
-                     row, col, sw_output[row*IMAGE_HEIGHT+col], hw_output[row*IMAGE_HEIGHT+col]);
-                 test_fail = 1;
-             }
-        }
-    }
-    // Check Results
-    for(row = 0; row < IMAGE_HEIGHT-FILTER_SIZE+1; row++) {
-        for(col = 0; col < IMAGE_WIDTH-FILTER_SIZE+1; col++) {
-             if(sw_output[row*IMAGE_HEIGHT+col] != hw_output[row*IMAGE_HEIGHT+col]){
-                 printf("Mismatch at : row = %d, col = %d, expected = %d, got = %d\n",
-                     row, col, sw_output[row*IMAGE_HEIGHT+col], hw_output[row*IMAGE_HEIGHT+col]);
+                     row, col, sw_output[row*IMAGE_WIDTH+col], hw_output[row*IMAGE_WIDTH+col]);
                  test_fail = 1;
              }
         }
