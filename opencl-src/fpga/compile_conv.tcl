@@ -7,7 +7,7 @@ set args "bin_conv2d.xclbin ../../../../mnist_test_img_0.pgm"
 #set args "bin_conv2d.xclbin ../../../../lena.pgm"
 # Host Compiler Flags
 set_property -name host_cflags -value "-g -O0 -std=c++0x -I$::env(PWD)" -objects [current_solution]
-set ker_name conv_2d_loop_pipeline
+set ker_name Convolve_Float4
 # Host source files
 add_files "host_app_opt.c"
 add_files "pgm.h"
@@ -21,7 +21,7 @@ add_files -kernel [get_kernels $ker_name] "conv_opt.cl"
 create_opencl_binary bin_conv2d
 set_property region "OCL_REGION_0" [get_opencl_binary bin_conv2d]
 create_compute_unit -opencl_binary [get_opencl_binary bin_conv2d] -kernel [get_kernels $ker_name] -name conv0
-
+#set_property max_memory_ports true [get_kernels $ker_name]
 # Compile the design for CPU based emulation
 compile_emulation -flow cpu
 run_emulation -flow cpu -args $args

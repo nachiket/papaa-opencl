@@ -47,7 +47,7 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pgm.h"
 ////////////////////////////////////////////////////////////////////////////////
 
-#define FILTER_SIZE    (3)
+#define FILTER_SIZE    (9)
 #define WORKGROUP_SIZE_0 (8)
 #define WORKGROUP_SIZE_1 (8)
 typedef float IMG_DTYPE;
@@ -91,7 +91,9 @@ int main(int argc, char** argv)
     int test_fail = 0;
     pgm_t input_img, output_img;
 
-    IMG_DTYPE filter[FILTER_SIZE*FILTER_SIZE] = {-1, -1, -1, -1, 8, -1, -1, -1, -1};
+    IMG_DTYPE filter[FILTER_SIZE*FILTER_SIZE] = {-1, -1, -1, -1, 8, -1, -1, -1, -1,
+	-1, -1, -1, -1, 8, -1, -1, -1, -1,-1, -1, -1, -1, 8, -1, -1, -1, -1,-1, -1, -1, -1, 8, -1, -1, -1, -1,-1, -1, -1, -1, 8, -1, -1, -1, -1,-1, -1, -1, -1, 8, -1, -1, -1, -1
+	,-1, -1, -1, -1, 8, -1, -1, -1, -1,-1, -1, -1, -1, 8, -1, -1, -1, -1,-1, -1, -1, -1, 8, -1, -1, -1, -1};
     IMG_DTYPE *h_input;      // input image buffer
     IMG_DTYPE *hw_output;    // host buffer for device output
     IMG_DTYPE *sw_output;    // host buffer for reference output
@@ -230,7 +232,7 @@ int main(int argc, char** argv)
 
     // Create the compute kernel in the program we wish to run
     //
-    kernel = clCreateKernel(program, "conv_2d_loop_pipeline", &err);
+    kernel = clCreateKernel(program, "Convolve_Float4", &err);
     if (!kernel || err != CL_SUCCESS) {
         printf("Error: Failed to create compute kernel!\n");
         printf("Test failed\n");

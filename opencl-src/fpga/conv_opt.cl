@@ -109,3 +109,42 @@ void conv_2d_loop_pipeline(
         }
 }
 
+// Filter optimization from AMD blog
+__kernel __attribute__ ((reqd_work_group_size(1, 1, 1)))
+void Convolve_Float4(const __global float * pInput, __constant float * pFilter, __global float * pOutput, const float bias) 
+{ 
+        const int nWidth = get_global_size(0);
+        const int xOut = get_global_id(0); 
+        const int yOut = get_global_id(1);
+        const int xInTopLeft = xOut; 
+        const int yInTopLeft = yOut;
+        float4 sum4 = 0;
+	const int nFilterWidth =  9;
+	int nInWidth = nWidth;
+        for (int r = 0; r < nFilterWidth; r++) 
+        { 
+                const int idxFtmp = r * nFilterWidth;
+                const int yIn = yInTopLeft + r; 
+                const int idxIntmp = yIn * nInWidth + xInTopLeft;
+                int c = 0;
+                int c4 = 0;
+                //while (c <= nFilterWidth-4) { 
+                //        float4 filter4 = vload4(c4, pFilter+idxFtmp);
+                //        float4 in4 = vload4(c4, pInput +idxIntmp);
+                //        sum4 += in4 * filter4; 
+                //        c += 4;
+                //        c4++;   
+                //}
+		__attribute__((opencl_unroll_hint(4)))
+		__attribute__((xcl_pipeline_loop))
+                for (int c1 = c; c1 < nFilterWidth; c1++) 
+                {
+                        const int idxF = idxFtmp + c1;
+                        const int idxIn = idxIntmp + c1;
+                        sum4.x += pFilter[idxF]*pInput[idxIn];
+                } 
+        }
+        const int idxOut = yOut * nWidth + xOut;
+        pOutput[idxOut] = sum4.x + sum4.y + sum4.z + sum4.w + bias; 
+}
+
