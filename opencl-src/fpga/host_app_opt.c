@@ -118,7 +118,6 @@ int main(int argc, char** argv)
         printf("Usage: %s conv_2d.xclbin image_path/image_name.pgm\n", argv[0]);
         return EXIT_FAILURE;
     }
-
     int row, col, pix;
     // read the image and initialize the host buffer with that
     err = readPGM(&input_img, argv[2]);
@@ -231,7 +230,7 @@ int main(int argc, char** argv)
 
     // Create the compute kernel in the program we wish to run
     //
-    kernel = clCreateKernel(program, "conv_2d_unroll", &err);
+    kernel = clCreateKernel(program, "conv_2d_loop_pipeline", &err);
     if (!kernel || err != CL_SUCCESS) {
         printf("Error: Failed to create compute kernel!\n");
         printf("Test failed\n");
