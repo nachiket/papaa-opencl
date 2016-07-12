@@ -2,8 +2,8 @@ include ./sources.mk
 exec=conv_layer
 
 CC=g++
-CPPFLAGS= -g $(shell pkg-config --cflags opencv) -I/usr/local/include/opencv2
-LIBS=$(shell pkg-config --libs opencv)
+CPPFLAGS= -g 
+LIBS=
 
 OBJ_DIR= obj
 CPP_OBJS := $(addprefix $(OBJ_DIR)/,$(notdir $(patsubst %.cpp,%.o,$(filter %.cpp,$(CPP_SRCS)))))
@@ -26,7 +26,7 @@ $(exec) : $(CPP_OBJS)
 obj:
 	@mkdir -p $(OBJ_DIR)
 run: $(exec)
-	./$(exec) ../caffe-ref/imgs/lena.jpg
+	./$(exec) ../../caffe-ref/imgs/lena.pgm
 
 print:
 	@echo "CPP_SRCS = $(CPP_SRCS)"
@@ -37,3 +37,4 @@ print:
 clean:
 	rm -rf ./$(OBJ_DIR)
 	rm $(exec)
+	rm output.pgm

@@ -8,6 +8,7 @@
 
 typedef float DTYPE;
 
+extern long LoadOpenCLKernel(char const* path, char **buf);
 int main(int argc, char** argv)
 {
 	cl_event event,event1,event2;
@@ -15,8 +16,8 @@ int main(int argc, char** argv)
 	int err, i =0, index =0;                            // error code returned from api calls
 	pgm_t input_pgm,output_pgm;
 
-	int ipgm_img_width;
-	int ipgm_img_height;
+	int ipgm_img_width,opgm_img_width;
+	int ipgm_img_height,opgm_img_height;
 
 	cl_device_id device_id;             // compute device id 
 	cl_context context;                 // compute context
@@ -35,8 +36,11 @@ int main(int argc, char** argv)
 	readPGM(&input_pgm,argv[1]);
 	ipgm_img_width  = input_pgm.width;
 	ipgm_img_height = input_pgm.height;
+	opgm_img_width  = input_pgm.width-CONV1_FILTER_WIDTH+1;
+	opgm_img_height = input_pgm.height-CONV1_FILTER_HEIGHT+1;
 
 	printf("cl:main input image resolution:%dx%d\n", ipgm_img_width,ipgm_img_height);
+	printf("cl:main output image resolution:%dx%d\n", opgm_img_width,opgm_img_height);
 
 	DTYPE  *h_image;
 	DTYPE  *h_filter, *h_bias, *h_output;
@@ -54,7 +58,7 @@ int main(int argc, char** argv)
 	unsigned int mem_size_filter = sizeof(DTYPE) * size_filter;
 	h_filter = (DTYPE*) conv1_weights;
 
-	unsigned int size_output = ipgm_img_width * ipgm_img_height;
+	unsigned int size_output = opgm_img_width * opgm_img_height;
 	unsigned int mem_size_output = sizeof(DTYPE) * size_output;
 	h_output = (DTYPE*) malloc(mem_size_output);
 
@@ -146,7 +150,7 @@ int main(int argc, char** argv)
 	d_image  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR /*| CL_MEM_USE_MSMC_TI*/, mem_size_image, h_image, &err);
 
 	cl_ulong time_start, time_end;
-	double total_time,itime;
+	double total_time;
 
 	// Create the input and output arrays in device memory for our calculation
 	d_filter = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR /*| CL_MEM_USE_MSMC_TI*/, mem_size_filter, h_filter+(i*CONV1_FILTER_WIDTH*CONV1_FILTER_HEIGHT), &err);
@@ -180,11 +184,10 @@ int main(int argc, char** argv)
 	localWorkSize[0] = 2;
 	localWorkSize[1] = 2;
 
-	globalWorkSize[0] = ipgm_img_width;
-	globalWorkSize[1] = ipgm_img_height;
+	globalWorkSize[0] = opgm_img_width;
+	globalWorkSize[1] = opgm_img_height;
 
 	/*Enqueue task for parallel execution*/
-	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
 	err = clEnqueueNDRangeKernel(commands, kernel[0], 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &event);
 	if (err != CL_SUCCESS)
 	{
@@ -196,9 +199,10 @@ int main(int argc, char** argv)
 		exit(1);
 	}
 	clWaitForEvents(1,&event);
+
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
 	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
-	itime = (double)(time_end - time_start);
-	total_time += itime;
+	total_time  = (double)(time_end - time_start);
 
 	// Retrieve result from device
 	err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_output, h_output, 0, NULL, NULL);
@@ -213,8 +217,8 @@ int main(int argc, char** argv)
 	clReleaseMemObject(d_bias);
 
 	char fileoutputname[15];
-	output_pgm.width = ipgm_img_width;
-	output_pgm.height = ipgm_img_height;
+	output_pgm.width = opgm_img_width;
+	output_pgm.height = opgm_img_height;
 	normalizeF2PGM(&output_pgm, h_output);
 	sprintf(fileoutputname, "output2d.pgm");	
 	/* Output image */

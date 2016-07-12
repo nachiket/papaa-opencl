@@ -1,0 +1,24 @@
+include sources.mk
+CC=gcc
+CFLAGS= -g -O3 -DDEVICE_GPU
+LIBS= -lOpenCL
+
+exec=ocl_app
+
+all:$(exec)
+
+$(exec):$(C_SRCS)
+	@echo Building....
+	$(CC) $(CFLAGS) $(C_SRCS) -o $(exec) $(LIBS)
+
+run:$(exec)
+	./$(exec) ../../imgs/mnist_test_img_0.pgm
+
+print:
+	@echo "C_SRCS = $(C_SRCS)"
+	@echo "C_FLAGS = $(CFLAGS)"
+
+.phony:clean
+clean:
+	rm $(exec)
+	rm *.pgm
