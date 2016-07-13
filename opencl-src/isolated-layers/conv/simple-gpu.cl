@@ -3,7 +3,9 @@ __kernel void convolve(
 	__constant float *filt, 		// K*K filter kernel
 	__global float *out, 			// W*H output images
 	const int K,				// filter resolution
-        const float pBias) 			// constant offset/bias
+	const int K1,				// filter resolution
+	const int K2,				// filter resolution
+        const __global float *pBias) 			// constant offset/bias
 {
 	// get pixel position
         const int W = get_global_size(0);
@@ -14,7 +16,7 @@ __kernel void convolve(
 	const int y = get_global_id(1);
 
 	// allocate local RAM for storing input pixels
-	__local in_local[W*H];
+	__local float in_local[28*28];
 
 	// load data into the local RAM
 	in_local[x*W+y] = in[x*W+y];
@@ -24,13 +26,13 @@ __kernel void convolve(
 	int c = 0;
 
 	// loop over rows
-	for (int r = 0, r < K, r++) 
+	for (int r = 0; r < K; r++) 
 	{ 
 		// loop over columns
-		for(c = 0, c < K, c++)
+		for(c = 0;c < K; c++)
 		{
 			sum += filt[r*K+c]*in_local[((y+r)*W+x)+c];
 		}
 	}
-	out[y*W+x] = sum + pBias;
+	out[y*W+x] = sum + *pBias;
 }

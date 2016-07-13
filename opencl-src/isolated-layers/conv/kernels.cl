@@ -1,37 +1,53 @@
+//#define LOCAL 1
 __kernel void convolve(
 	const __global float * pInput, 
 	__constant float * pFilter, 
 	__global float * pOutput, 
 	const int nFilterWidth,
 	const int nFilterHeight,
-	const int nInMaps,
-        __global const float * pBias) 
+    __global const float * pBias,
+	__local float* in_local) 
 {
 
 	const int x = get_global_id(0); 
 	const int y = get_global_id(1);
 
-        const int OWidth  = get_global_size(0);
-        const int OHeight = get_global_size(1);
+    const int OWidth  = get_global_size(0);
+    const int OHeight = get_global_size(1);
+
 	const int ImWidth = OWidth+nFilterWidth-1;
-	const int ImHeight = OHeight+nFilterHeight-1;	
-	float sum = 0;
-	int c = 0;
-	for(int maps = 0; maps<nInMaps; maps++)
-	{ 
-		for (int r = 0; r <nFilterHeight; r++) 
-		{ 
-			const int idxFtmp = (maps*nFilterHeight + r) * nFilterWidth; 
-			const int idxIntmp = ((maps*ImHeight + y + r) * ImWidth) + x;
-			for(c = 0; c <nFilterWidth; c++)
-			{
-				const int idxF = idxFtmp + c;
-				const int idxIn = idxIntmp + c;
-				sum += pFilter[idxFtmp]*pInput[idxIntmp];
-			}
-		}
+	const int ImHeight  = OHeight + nFilterHeight -1;
+
+#ifdef LOCAL
+	event_t event;
+
+	for(int i=0; i < get_local_size(1); i++)
+ 	{
+		event = async_work_group_copy(&in_local[i*get_local_size(0)],&pInput[(get_group_id(1)*get_local_size(1)+i)*get_global_size(0)+(get_group_id(0)*get_local_size(0))],get_local_size(0),event);
 	}
+	wait_group_events(1, &event);
+    // load data into the local RAM
+    //in_local[y*ImWidth+x] = pInput[y*ImWidth+x];
+    //in_local[y*ImWidth+x] = pInput[y*ImWidth+x];
+	//barrier(CLK_LOCAL_MEM_FENCE);
+#endif
+
+	float sum = 0;
+#pragma unroll 5
+	for (int r = 0; r <nFilterHeight; r++) 
+	{ 
+#pragma unroll 5
+		for(int c = 0; c <nFilterWidth; c++)
+		{
+#ifdef LOCAL
+			sum += pFilter[r*nFilterWidth+c]*in_local[(y+r)*ImWidth+x+c];
+#else
+			sum += pFilter[r*nFilterWidth+c]*pInput[(y+r)*ImWidth+x+c];
+#endif
+		}
+	}	
 	pOutput[(y*OWidth)+x] = sum + *pBias;
+
 }
 
 

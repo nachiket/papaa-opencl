@@ -153,9 +153,9 @@ int main(int argc, char** argv)
 	double total_time;
 
 	// Create the input and output arrays in device memory for our calculation
-	d_filter = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR /*| CL_MEM_USE_MSMC_TI*/, mem_size_filter, h_filter+(i*CONV1_FILTER_WIDTH*CONV1_FILTER_HEIGHT), &err);
+	d_filter = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR /*| CL_MEM_USE_MSMC_TI*/, mem_size_filter, h_filter, &err);
 	d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY /*| CL_MEM_USE_MSMC_TI*/, mem_size_output, NULL, &err);
-	d_bias   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_bias, h_bias+i, &err);
+	d_bias   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_bias, h_bias, &err);
 
 	if (!d_image || !d_filter || !d_output || !d_bias)
 	{
@@ -167,25 +167,25 @@ int main(int argc, char** argv)
 	size_t localWorkSize[2], globalWorkSize[2];
 	int filter_width  = CONV1_FILTER_WIDTH;
 	int filter_height = CONV1_FILTER_HEIGHT;
-	int in_maps = 1;
+
+	localWorkSize[0] = 2;
+	localWorkSize[1] = 2;
+
+	globalWorkSize[0] = opgm_img_width;
+	globalWorkSize[1] = opgm_img_height;
 
 	err  = clSetKernelArg(kernel[0], 0, sizeof(cl_mem), (void *)&d_image);
 	err |= clSetKernelArg(kernel[0], 1, sizeof(cl_mem), (void *)&d_filter);
 	err |= clSetKernelArg(kernel[0], 2, sizeof(cl_mem), (void *)&d_output);
 	err |= clSetKernelArg(kernel[0], 3, sizeof(int), (void *)&filter_width);
 	err |= clSetKernelArg(kernel[0], 4, sizeof(int), (void *)&filter_height);
-	err |= clSetKernelArg(kernel[0], 5, sizeof(int), (void *)&in_maps);
-	err |= clSetKernelArg(kernel[0], 6, sizeof(cl_mem), (void*)&d_bias);
+	err |= clSetKernelArg(kernel[0], 5, sizeof(cl_mem), (void*)&d_bias);
+	err |= clSetKernelArg(kernel[0], 6, /*28*28*sizeof(float)*/localWorkSize[0]*localWorkSize[1], NULL);
 
 	if (err != CL_SUCCESS) {
 		printf("Error: Failed to set kernel arguments! %d\n", err);	
 		exit(1);
 	}
-	localWorkSize[0] = 2;
-	localWorkSize[1] = 2;
-
-	globalWorkSize[0] = opgm_img_width;
-	globalWorkSize[1] = opgm_img_height;
 
 	/*Enqueue task for parallel execution*/
 	err = clEnqueueNDRangeKernel(commands, kernel[0], 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &event);

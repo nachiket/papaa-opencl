@@ -17,9 +17,9 @@ conv3Dgpu: 3Dhost.c load_kernel.c ../../../caffe-ref/scripts/gen/lenet5_model.c
 
 run:
 	./conv2Dcpu mnist_test_img_0.pgm
-	./conv3Dcpu mnist_test_img_0.pgm
 	./conv2Dgpu mnist_test_img_0.pgm
-	./conv3Dgpu mnist_test_img_0.pgm
+#	./conv3Dcpu mnist_test_img_0.pgm
+#	./conv3Dgpu mnist_test_img_0.pgm
 
 clean:
 	rm -rf conv* output*

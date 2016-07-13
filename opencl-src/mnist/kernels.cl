@@ -15,8 +15,7 @@ __kernel void filter3D(
         const int OHeight = get_global_size(1);
         const int ImWidth = OWidth+nFilterWidth-1;
         const int ImHeight = OHeight+nFilterHeight-1;   
-        float sum = 0;
-        int c = 0;
+        float4 sum4 = 0;
         int idxFstart = z*nFilterHeight*nFilterWidth*nInMaps;
 
            for(int maps = 0; maps<nInMaps; maps++)
@@ -25,15 +24,25 @@ __kernel void filter3D(
                 {
                         const int idxFtmp = idxFstart + (maps*nFilterHeight + r) * nFilterWidth; 
                         const int idxIntmp = (((maps*ImHeight) + y + r) * ImWidth) + x;
-                        for(c = 0; c <nFilterWidth; c++)
+        		int c = 0;
+			int c4 = 0;
+			while(c <= nFilterWidth-4)
+			{
+				float4 filter4 = vload4(c4,pFilter+idxFtmp);
+				float4 in4 = vload4(c4, pInput +idxIntmp);
+				sum4 += in4 * filter4;
+				c +=4;
+				c4++;
+			}
+                        for(int c1 = c; c1 <nFilterWidth; c1++)
                         {
-                                const int idxF = idxFtmp + c;
-                                const int idxIn = idxIntmp + c;
-                                sum += pFilter[idxF]*pInput[idxIn];
+                                const int idxF = idxFtmp + c1;
+                                const int idxIn = idxIntmp + c1;
+                                sum4.x += pFilter[idxF]*pInput[idxIn];
                         }
                 }
            }
-           pOutput[((z*OHeight*OWidth)+(y*OWidth)+x)] = sum + pBias[z];
+           pOutput[((z*OHeight*OWidth)+(y*OWidth)+x)] = sum4.x + sum4.y + sum4.z + sum4.w + pBias[z];
 }
 
 __kernel void maxpool3D(
