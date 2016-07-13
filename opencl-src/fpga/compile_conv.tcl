@@ -1,13 +1,19 @@
+puts "No of passed arguments passed = $argc"
+puts $argv0
 create_solution -name simple_conv -dir . -force
 
 # Target a Xilinx FPGA board
 add_device -vbnv xilinx:adm-pcie-7v3:1ddr:3.0
 
-set args "bin_conv2d.xclbin ../../../../mnist_test_img_0.pgm"
+set host_args "bin_conv2d.xclbin ../../../../mnist_test_img_0.pgm"
+#set host_args "bin_conv2d.xclbin conv"
+
 #set args "bin_conv2d.xclbin ../../../../lena.pgm"
 # Host Compiler Flags
 set_property -name host_cflags -value "-g -O0 -std=c++0x -I$::env(PWD)" -objects [current_solution]
-set ker_name Convolve_Float4
+set ker_name conv_2d_linebuff
+#lappend host_args $ker_name
+puts $host_args 
 # Host source files
 add_files "host_app_opt.c"
 add_files "pgm.h"
@@ -24,7 +30,8 @@ create_compute_unit -opencl_binary [get_opencl_binary bin_conv2d] -kernel [get_k
 #set_property max_memory_ports true [get_kernels $ker_name]
 # Compile the design for CPU based emulation
 compile_emulation -flow cpu
-run_emulation -flow cpu -args $args
+puts "Comipled for CPU emulation..."
+run_emulation -flow cpu -args $host_args
 
 # Create estimated resource usage and latency report
 report_estimate

@@ -148,3 +148,73 @@ void Convolve_Float4(const __global float * pInput, __constant float * pFilter, 
         pOutput[idxOut] = sum4.x + sum4.y + sum4.z + sum4.w + bias; 
 }
 
+#define MAX_IMG_WIDTH (32)
+#define FILTER_SIZE (3)
+
+__kernel __attribute__ ((reqd_work_group_size(1, 1, 1)))
+void conv_2d_linebuff(__global const float *pInput, __global float *pFilter, __global float *pOutput, const int img_width, const int img_height, const float bias)
+{
+    local float row0[MAX_IMG_WIDTH];
+    local float row1[MAX_IMG_WIDTH];
+    local float row2[MAX_IMG_WIDTH];
+    local float outbuf[MAX_IMG_WIDTH];
+    local float local_filt[FILTER_SIZE*FILTER_SIZE];
+
+    float win[FILTER_SIZE*FILTER_SIZE];
+    // copy first 2 rows to start with
+    int row, col, kr, kc;
+    async_work_group_copy(row0, pInput, img_width, 0);
+    async_work_group_copy(row1, pInput+img_width, img_width, 0);
+    // copy the filter to the local memory
+    async_work_group_copy(local_filt, pFilter, FILTER_SIZE*FILTER_SIZE, 0);
+
+	for(row = 0; row < img_height - FILTER_SIZE + 1; row++) 
+	{
+        // copy the new row to the proper buffer
+        if(row % FILTER_SIZE == 0) {
+            async_work_group_copy(row2, pInput+(row+FILTER_SIZE-1)*img_width, img_width, 0);
+        } else if(row % FILTER_SIZE == 1) {
+            async_work_group_copy(row0, pInput+(row+FILTER_SIZE-1)*img_width, img_width, 0);
+        } else if(row % FILTER_SIZE == 2) {
+            async_work_group_copy(row1, pInput+(row+FILTER_SIZE-1)*img_width, img_width, 0);
+        }
+        // wait for the new line buffer to be copied
+        barrier(CLK_LOCAL_MEM_FENCE);
+        __attribute__((xcl_pipeline_loop)) 
+        for(col = 0; col < img_width-FILTER_SIZE+1; col++) {
+            // copy data from line buffer into the window
+            if(row%FILTER_SIZE == 0) {
+                // rows are in row0, row1, row2
+                win[0] = row0[col]; win[1] = row0[col+1]; win[2] = row0[col+2];
+                win[3] = row1[col]; win[4] = row1[col+1]; win[5] = row1[col+2];
+                win[6] = row2[col]; win[7] = row2[col+1]; win[8] = row2[col+2];
+            } else if(row%FILTER_SIZE == 1) {
+                // rows are in row1, row2, row0
+                win[0] = row1[col]; win[1] = row1[col+1]; win[2] = row1[col+2];
+                win[3] = row2[col]; win[4] = row2[col+1]; win[5] = row2[col+2];
+                win[6] = row0[col]; win[7] = row0[col+1]; win[8] = row0[col+2];
+           
+            } else if(row%FILTER_SIZE == 2) {
+                // rows are in row2, row0, row1
+                win[0] = row2[col]; win[1] = row2[col+1]; win[2] = row2[col+2];
+                win[3] = row0[col]; win[4] = row0[col+1]; win[5] = row0[col+2];
+                win[6] = row1[col]; win[7] = row1[col+1]; win[8] = row1[col+2];
+            }
+
+            float res = 0;
+            // compute
+            for(int k = 0; k < FILTER_SIZE*FILTER_SIZE; k++) {
+                res += win[k] * local_filt[k];
+            }
+            // add bias
+            res += bias;
+            // store the output pixel to local buffer
+            outbuf[col] = res;
+        }
+        //copy the output row to the device global memory.
+        async_work_group_copy(pOutput+row*img_width, outbuf, img_width, 0);
+        barrier(CLK_LOCAL_MEM_FENCE);
+	}
+}
+
+

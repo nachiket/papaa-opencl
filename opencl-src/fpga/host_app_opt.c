@@ -47,7 +47,7 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pgm.h"
 ////////////////////////////////////////////////////////////////////////////////
 
-#define FILTER_SIZE    (9)
+#define FILTER_SIZE    (3)
 #define WORKGROUP_SIZE_0 (8)
 #define WORKGROUP_SIZE_1 (8)
 typedef float IMG_DTYPE;
@@ -91,9 +91,7 @@ int main(int argc, char** argv)
     int test_fail = 0;
     pgm_t input_img, output_img;
 
-    IMG_DTYPE filter[FILTER_SIZE*FILTER_SIZE] = {-1, -1, -1, -1, 8, -1, -1, -1, -1,
-	-1, -1, -1, -1, 8, -1, -1, -1, -1,-1, -1, -1, -1, 8, -1, -1, -1, -1,-1, -1, -1, -1, 8, -1, -1, -1, -1,-1, -1, -1, -1, 8, -1, -1, -1, -1,-1, -1, -1, -1, 8, -1, -1, -1, -1
-	,-1, -1, -1, -1, 8, -1, -1, -1, -1,-1, -1, -1, -1, 8, -1, -1, -1, -1,-1, -1, -1, -1, 8, -1, -1, -1, -1};
+    IMG_DTYPE filter[FILTER_SIZE*FILTER_SIZE] = {-1, -1, -1, -1, 8, -1, -1, -1, -1};
     IMG_DTYPE *h_input;      // input image buffer
     IMG_DTYPE *hw_output;    // host buffer for device output
     IMG_DTYPE *sw_output;    // host buffer for reference output
@@ -120,6 +118,7 @@ int main(int argc, char** argv)
         printf("Usage: %s conv_2d.xclbin image_path/image_name.pgm\n", argv[0]);
         return EXIT_FAILURE;
     }
+    printf("Kernel name = %s\n", argv[3]);
     int row, col, pix;
     // read the image and initialize the host buffer with that
     err = readPGM(&input_img, argv[2]);
@@ -232,7 +231,7 @@ int main(int argc, char** argv)
 
     // Create the compute kernel in the program we wish to run
     //
-    kernel = clCreateKernel(program, "Convolve_Float4", &err);
+    kernel = clCreateKernel(program, "conv_2d_linebuff", &err);
     if (!kernel || err != CL_SUCCESS) {
         printf("Error: Failed to create compute kernel!\n");
         printf("Test failed\n");
@@ -275,8 +274,9 @@ int main(int argc, char** argv)
     err  = clSetKernelArg(kernel, 0, sizeof(cl_mem), &d_in_image);
     err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &d_in_filter);
     err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &d_out_image);
-    //err |= clSetKernelArg(kernel, 3, sizeof(int),    &filter_size);
-    err |= clSetKernelArg(kernel, 3, sizeof(IMG_DTYPE),    &bias);
+    err |= clSetKernelArg(kernel, 3, sizeof(int),    &input_img.width);
+    err |= clSetKernelArg(kernel, 4, sizeof(int),    &input_img.height);
+    err |= clSetKernelArg(kernel, 5, sizeof(IMG_DTYPE),    &bias);
     if (err != CL_SUCCESS) {
         printf("Error: Failed to set kernel arguments! %d\n", err);
         printf("Test failed\n");
@@ -288,8 +288,8 @@ int main(int argc, char** argv)
     err = clGetKernelWorkGroupInfo(kernel, device_id, CL_KERNEL_COMPILE_WORK_GROUP_SIZE, sizeof(wg_info), wg_info, NULL);
     printf("WG Info: %d, %d, %d\n", wg_info[0], wg_info[1], wg_info[2]);
     // Launch computation kernel
-    global[0] = input_img.width;
-    global[1] = input_img.height;
+    global[0] = 1;//input_img.width;
+    global[1] = 1;//input_img.height;
     local[0] = wg_info[0];//WORKGROUP_SIZE_0;
     local[1] = wg_info[1]; //WORKGROUP_SIZE_1;
 
