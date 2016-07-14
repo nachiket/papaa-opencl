@@ -5,7 +5,7 @@ __kernel void conv_2d(
     __global float *out,              // W*H output images
     const int nFilterWidth,
     const int nFilterHeight,
-    const float pBias,
+    __global const float* pBias,
     __local float * image_buff)                // constant offset/bias
 {
 
@@ -19,14 +19,12 @@ __kernel void conv_2d(
     const int OWidth   = ImWidth - nFilterWidth +1;
     const int OHeight  = ImHeight - nFilterHeight +1;
 
-//    __local float image_buff[ImWidth *(get_local_size(1)*row + nFilterHeight -1)];
-    __local float local_filt[ FILTER_SIZE* FILTER_SIZE];
-
+/*    __local float local_filt[ FILTER_SIZE* FILTER_SIZE];
     if(x < nFilterWidth*nFilterHeight)
     {
 	local_filt[x] = filt[x];
     }
-
+*/
     image_buff[y * ImWidth + x] = in[row * ImWidth + x];
     if(y > (get_local_size(1) - nFilterHeight))
     {
@@ -39,10 +37,10 @@ __kernel void conv_2d(
     {
         for(int c = 0; c < nFilterWidth; c++)
         {
-            sum += local_filt[r*nFilterWidth + c]*image_buff[(y + r) * ImWidth + x + c];
+            sum += filt[r*nFilterWidth + c]*image_buff[(y + r) * ImWidth + x + c];
         }
     }
-    out[row * ImWidth + x] = sum + pBias;
+    out[row * ImWidth + x] = sum + *pBias;
 }
 
 

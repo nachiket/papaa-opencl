@@ -8,6 +8,8 @@
 
 typedef float DTYPE;
 
+#define NUM_WORK_GROUPS 4
+
 extern long LoadOpenCLKernel(char const* path, char **buf);
 int main(int argc, char** argv)
 {
@@ -169,7 +171,7 @@ int main(int argc, char** argv)
 	int filter_height = CONV1_FILTER_HEIGHT;
 
 	localWorkSize[0] = opgm_img_width;
-	localWorkSize[1] = 7;
+	localWorkSize[1] = opgm_img_height/NUM_WORK_GROUPS;
 
 	globalWorkSize[0] = opgm_img_width;
 	globalWorkSize[1] = opgm_img_height;
@@ -180,7 +182,7 @@ int main(int argc, char** argv)
 	err |= clSetKernelArg(kernel[0], 3, sizeof(int), (void *)&filter_width);
 	err |= clSetKernelArg(kernel[0], 4, sizeof(int), (void *)&filter_height);
 	err |= clSetKernelArg(kernel[0], 5, sizeof(cl_mem), (void*)&d_bias);
-	err |= clSetKernelArg(kernel[0], 6, sizeof(float), (void*)NULL);
+	err |= clSetKernelArg(kernel[0], 6, sizeof(float)*localWorkSize[0]*(localWorkSize[1]+filter_height-1), (void*)NULL);
 
 	if (err != CL_SUCCESS) {
 		printf("Error: Failed to set kernel arguments! %d\n", err);	
