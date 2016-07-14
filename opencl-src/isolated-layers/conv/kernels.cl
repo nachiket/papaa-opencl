@@ -1,4 +1,4 @@
-//#define LOCAL 1
+#define LOCAL 1
 __kernel void convolve(
 	const __global float * pInput, 
 	__constant float * pFilter, 
