@@ -10,6 +10,7 @@ void conv_2d(
     const float pBias)                // constant offset/bias
 {
     __local float local_image[IMAGE_WIDTH * IMAGE_HEIGHT] __attribute__((xcl_array_partition(cyclic,3,1)));
+	// put all the filter coefficients in the registers to provide parallel access
     __local float local_filt[FILTER_SIZE * FILTER_SIZE]  __attribute__((xcl_array_partition(complete,1)));
 
     __attribute__((xcl_pipeline_workitems)) {
@@ -24,10 +25,10 @@ void conv_2d(
     // requires 3x3 neighbor instead of single pixel
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    float sum = 0;
         
     // loop over rows
     __attribute__((xcl_pipeline_workitems)) {
+        float sum = 0;
         int i = get_local_id(0);
         int j = get_local_id(1);
         //__attribute__((opencl_unroll_hint))
