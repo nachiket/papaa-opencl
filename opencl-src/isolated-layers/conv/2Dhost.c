@@ -36,8 +36,8 @@ int main(int argc, char** argv)
 	readPGM(&input_pgm,argv[1]);
 	ipgm_img_width  = input_pgm.width;
 	ipgm_img_height = input_pgm.height;
-	opgm_img_width  = input_pgm.width-CONV1_FILTER_WIDTH+1;
-	opgm_img_height = input_pgm.height-CONV1_FILTER_HEIGHT+1;
+	opgm_img_width  = input_pgm.width;//-CONV1_FILTER_WIDTH+1;
+	opgm_img_height = input_pgm.height;//-CONV1_FILTER_HEIGHT+1;
 
 	printf("cl:main input image resolution:%dx%d\n", ipgm_img_width,ipgm_img_height);
 	printf("cl:main output image resolution:%dx%d\n", opgm_img_width,opgm_img_height);
@@ -140,7 +140,7 @@ int main(int argc, char** argv)
 		exit(1);
 	}
 
-	kernel[0] = clCreateKernel(program, "convolve", &err);
+	kernel[0] = clCreateKernel(program, "conv_2d", &err);
 	if (!kernel[0] || err != CL_SUCCESS)
 	{
 		printf("Error: Failed to create compute kernel!\n");
@@ -168,8 +168,8 @@ int main(int argc, char** argv)
 	int filter_width  = CONV1_FILTER_WIDTH;
 	int filter_height = CONV1_FILTER_HEIGHT;
 
-	localWorkSize[0] = 2;
-	localWorkSize[1] = 2;
+	localWorkSize[0] = opgm_img_width;
+	localWorkSize[1] = 7;
 
 	globalWorkSize[0] = opgm_img_width;
 	globalWorkSize[1] = opgm_img_height;
@@ -180,7 +180,7 @@ int main(int argc, char** argv)
 	err |= clSetKernelArg(kernel[0], 3, sizeof(int), (void *)&filter_width);
 	err |= clSetKernelArg(kernel[0], 4, sizeof(int), (void *)&filter_height);
 	err |= clSetKernelArg(kernel[0], 5, sizeof(cl_mem), (void*)&d_bias);
-	err |= clSetKernelArg(kernel[0], 6, /*28*28*sizeof(float)*/localWorkSize[0]*localWorkSize[1], NULL);
+	err |= clSetKernelArg(kernel[0], 6, sizeof(float), (void*)NULL);
 
 	if (err != CL_SUCCESS) {
 		printf("Error: Failed to set kernel arguments! %d\n", err);	
