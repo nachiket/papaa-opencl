@@ -8,6 +8,6 @@ This lab introduces OpenCL programming using a simple 2D convolution application
 - Output pixel is written back to global memory.
 
 # Steps to run
-make all : to compile the host application.
+_make all_ : to compile the host application.
 
-make run : to run the application. Note that the kernel is compiled by the host application during the runtime.
+_make run_ : to run the application. Note that the kernel is compiled by the host application during the runtime.
