@@ -1,34 +1,40 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <CL/cl.h>
 #include <CL/cl_ext.h>
-#include "../../../../caffe-ref/scripts/gen/lenet5_model.h"
 #include "pgm.h"
 
+#define NUM_WORK_GROUPS (4)
+#define FILTER_SIZE   (3)
 typedef float DTYPE;
 
-#define NUM_WORK_GROUPS 4
 
 extern long LoadOpenCLKernel(char const* path, char **buf);
+
+int APPROX_EQ(DTYPE n1, DTYPE n2, float eps) {
+	return abs(n1-n2) < eps ? 1: 0;
+}
+
 int main(int argc, char** argv)
 {
 	cl_event event,event1,event2;
-	int j =0,stride=2;
-	int err, i =0, index =0;                            // error code returned from api calls
+	int err, i;                            // error code returned from api calls
 	pgm_t input_pgm,output_pgm;
+	DTYPE lap_filter[FILTER_SIZE*FILTER_SIZE] = {-1.0, -1.0, -1.0, -1.0, 8.0, -1.0, -1.0, -1.0, -1.0};
+	DTYPE bias = 0.01;
+	DTYPE *ref_output;
 
-	int ipgm_img_width,opgm_img_width;
-	int ipgm_img_height,opgm_img_height;
 
 	cl_device_id device_id;             // compute device id 
 	cl_context context;                 // compute context
 	cl_command_queue commands;          // compute command queue
 	cl_program program;                 // compute program
-	cl_kernel kernel[3];                // compute kernel
+	cl_kernel kernel;                // compute kernel
 
 	// OpenCL device memory for matrices
-	cl_mem d_image, d_filter, d_output, d_bias;
+	cl_mem d_image, d_filter, d_output;
 
 	if (argc != 2) {
 		printf("Expecting 2 arguments.\n");
@@ -36,37 +42,35 @@ int main(int argc, char** argv)
 	}
 
 	readPGM(&input_pgm,argv[1]);
-	ipgm_img_width  = input_pgm.width;
-	ipgm_img_height = input_pgm.height;
-	opgm_img_width  = input_pgm.width;
-	opgm_img_height = input_pgm.height;
 
-	printf("cl:main input image resolution:%dx%d\n", ipgm_img_width,ipgm_img_height);
-	printf("cl:main output image resolution:%dx%d\n", opgm_img_width,opgm_img_height);
+	printf("Input image resolution:%dx%d\n", input_pgm.width,input_pgm.height);
 
 	DTYPE  *h_image;
 	DTYPE  *h_filter, *h_bias, *h_output;
 
 	// Allocate host memory for matrices
-	unsigned int size_image = ipgm_img_width*ipgm_img_height;
+	unsigned int size_image = input_pgm.width*input_pgm.height;
 	unsigned int mem_size_image = sizeof(DTYPE) * size_image;
 	h_image    = (DTYPE*)malloc(mem_size_image);
-	for(i=0;i<size_image;i++)
+	ref_output = (DTYPE*)malloc(mem_size_image);
+
+	for(i = 0; i < size_image; i++)
 	{
 		h_image[i] = (DTYPE) input_pgm.buf[i]/255;
 	}
 
-	unsigned int size_filter = CONV1_FILTER_WIDTH*CONV1_FILTER_HEIGHT;
+	unsigned int size_filter = FILTER_SIZE*FILTER_SIZE;
 	unsigned int mem_size_filter = sizeof(DTYPE) * size_filter;
-	h_filter = (DTYPE*) conv1_weights;
+	h_filter = (DTYPE*) lap_filter;
 
-	unsigned int size_output = opgm_img_width * opgm_img_height;
+	unsigned int size_output = input_pgm.width * input_pgm.height;
 	unsigned int mem_size_output = sizeof(DTYPE) * size_output;
 	h_output = (DTYPE*) malloc(mem_size_output);
 
 	unsigned int size_bias = 1; //1 bias value for 1 output map 
 	unsigned int mem_size_bias = sizeof(DTYPE) * size_bias;
-	h_bias = (DTYPE*) conv1_bias;
+
+	h_bias = (DTYPE*) &bias;
 
 	cl_uint dev_cnt = 0;
 	clGetPlatformIDs(0, 0, &dev_cnt);
@@ -76,11 +80,7 @@ int main(int argc, char** argv)
 	clGetPlatformIDs(dev_cnt, platform_ids, NULL);
 	for(i=0;i<dev_cnt;i++)
 	{
-#ifdef DEVICE_GPU
 		err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_GPU, 1, &device_id, NULL);
-#else
-		err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_CPU, 1, &device_id, NULL);
-#endif
 		if(err == CL_SUCCESS)
 			break;
 	}
@@ -117,7 +117,7 @@ int main(int argc, char** argv)
 	// Create the compute program from the source file
 	char *KernelSource;
 	long lFileSize;
-	lFileSize = LoadOpenCLKernel("gpu-local.cl", &KernelSource);
+	lFileSize = LoadOpenCLKernel("conv_kernel.cl", &KernelSource);
 	if( lFileSize < 0L ) {
 		perror("File read failed");
 		return 1;
@@ -142,24 +142,23 @@ int main(int argc, char** argv)
 		exit(1);
 	}
 
-	kernel[0] = clCreateKernel(program, "conv_local", &err);
-	if (!kernel[0] || err != CL_SUCCESS)
+	kernel = clCreateKernel(program, "conv_local", &err);
+	if (!kernel || err != CL_SUCCESS)
 	{
 		printf("Error: Failed to create compute kernel!\n");
 		exit(1);
 	}
 
-	d_image  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR /*| CL_MEM_USE_MSMC_TI*/, mem_size_image, h_image, &err);
+	d_image  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, mem_size_image, h_image, &err);
 
 	cl_ulong time_start, time_end;
 	double total_time;
 
 	// Create the input and output arrays in device memory for our calculation
-	d_filter = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR /*| CL_MEM_USE_MSMC_TI*/, mem_size_filter, h_filter, &err);
-	d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY /*| CL_MEM_USE_MSMC_TI*/, mem_size_output, NULL, &err);
-	d_bias   = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR , mem_size_bias, h_bias, &err);
+	d_filter = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, mem_size_filter, h_filter, &err);
+	d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY, mem_size_output, NULL, &err);
 
-	if (!d_image || !d_filter || !d_output || !d_bias)
+	if (!d_image || !d_filter || !d_output)
 	{
 		printf("Error: Failed to allocate device memory!\n");
 		exit(1);
@@ -167,22 +166,22 @@ int main(int argc, char** argv)
 		
 	// Launch OpenCL kernel
 	size_t localWorkSize[2], globalWorkSize[2];
-	int filter_width  = CONV1_FILTER_WIDTH;
-	int filter_height = CONV1_FILTER_HEIGHT;
+	int filter_width  = FILTER_SIZE;
+	int filter_height = FILTER_SIZE;
 
-	localWorkSize[0] = opgm_img_width;
-	localWorkSize[1] = opgm_img_height/NUM_WORK_GROUPS;
+	localWorkSize[0] = input_pgm.width;
+	localWorkSize[1] = input_pgm.height/NUM_WORK_GROUPS;
 
-	globalWorkSize[0] = opgm_img_width;
-	globalWorkSize[1] = opgm_img_height;
+	globalWorkSize[0] = input_pgm.width;
+	globalWorkSize[1] = input_pgm.height;
 
-	err  = clSetKernelArg(kernel[0], 0, sizeof(cl_mem), (void *)&d_image);
-	err |= clSetKernelArg(kernel[0], 1, sizeof(cl_mem), (void *)&d_filter);
-	err |= clSetKernelArg(kernel[0], 2, sizeof(cl_mem), (void *)&d_output);
-	err |= clSetKernelArg(kernel[0], 3, sizeof(int), (void *)&filter_width);
-	err |= clSetKernelArg(kernel[0], 4, sizeof(int), (void *)&filter_height);
-	err |= clSetKernelArg(kernel[0], 5, sizeof(cl_mem), (void*)&d_bias);
-	err |= clSetKernelArg(kernel[0], 6, sizeof(float)*localWorkSize[0]*(localWorkSize[1]+filter_height-1), (void*)NULL);
+	err  = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&d_image);
+	err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&d_filter);
+	err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&d_output);
+	err |= clSetKernelArg(kernel, 3, sizeof(int), (void *)&filter_width);
+	err |= clSetKernelArg(kernel, 4, sizeof(int), (void *)&filter_height);
+	err |= clSetKernelArg(kernel, 5, sizeof(float), (void*)&bias);
+	err |= clSetKernelArg(kernel, 6, sizeof(float)*localWorkSize[0]*(localWorkSize[1]+filter_height-1), (void*)NULL);
 
 	if (err != CL_SUCCESS) {
 		printf("Error: Failed to set kernel arguments! %d\n", err);	
@@ -190,7 +189,7 @@ int main(int argc, char** argv)
 	}
 
 	/*Enqueue task for parallel execution*/
-	err = clEnqueueNDRangeKernel(commands, kernel[0], 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &event);
+	err = clEnqueueNDRangeKernel(commands, kernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &event);
 	if (err != CL_SUCCESS)
 	{
 		if(err == CL_INVALID_WORK_ITEM_SIZE)
@@ -208,6 +207,41 @@ int main(int argc, char** argv)
 
 	// Retrieve result from device
 	err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_output, h_output, 0, NULL, NULL);
+	clFinish(commands);
+
+	//-------------------------------------------------------------
+	// Compare between host and device output
+    // Generate reference output
+    int kr, kc, row, col;
+    DTYPE sum = 0;
+    for(row = 0; row < input_pgm.height-FILTER_SIZE+1; row++) {
+        for(col = 0; col < input_pgm.width-FILTER_SIZE+1; col++) {
+            sum = 0;
+            for(kr = 0; kr < FILTER_SIZE; kr++) {
+                for(kc = 0; kc < FILTER_SIZE; kc++ ) {
+                    sum += (lap_filter[kr*FILTER_SIZE + kc] * h_image[(row+kr)*input_pgm.width + col + kc]);
+                }
+            }
+            ref_output[row*input_pgm.width + col] = sum + bias;
+        }
+    }
+    // Check Results
+	int test_fail = 0;
+    for(row = 0; row < input_pgm.height - FILTER_SIZE + 1; row++) {
+        for(col = 0; col < input_pgm.width - FILTER_SIZE + 1; col++) {
+             if(!APPROX_EQ(ref_output[row*input_pgm.width+col], h_output[row*input_pgm.width+col], 1e-14)) {
+                 printf("Mismatch at : row = %d, col = %d, expected = %f, got = %f\n",
+                     row, col, ref_output[row*input_pgm.width+col], h_output[row*input_pgm.width+col]);
+                 test_fail = 1;
+             }
+        }
+    }
+	if (test_fail) {
+		printf("INFO: TEST FAILED !!!!\n");
+	} else {
+		printf("INFO: ****TEST PASSED****\n");
+	}
+
 	if (err != CL_SUCCESS)
 	{
 		printf("Error: Failed to read output array! %d\n", err);
@@ -216,11 +250,10 @@ int main(int argc, char** argv)
 
 	clReleaseMemObject(d_filter);
 	clReleaseMemObject(d_output);
-	clReleaseMemObject(d_bias);
 
 	char fileoutputname[15];
-	output_pgm.width = opgm_img_width;
-	output_pgm.height = opgm_img_height;
+	output_pgm.width = input_pgm.width;
+	output_pgm.height = input_pgm.height;
 	normalizeF2PGM(&output_pgm, h_output);
 	sprintf(fileoutputname, "output2d.pgm");	
 	/* Output image */
@@ -230,13 +263,13 @@ int main(int argc, char** argv)
 
 	destroyPGM(&input_pgm);
 	destroyPGM(&output_pgm);
-
+	free(ref_output);
 	free(h_image);
 	free(h_output);
 	clReleaseMemObject(d_image);
 
 	clReleaseProgram(program);
-	clReleaseKernel(kernel[0]);
+	clReleaseKernel(kernel);
 	clReleaseCommandQueue(commands);
 	clReleaseContext(context);
 

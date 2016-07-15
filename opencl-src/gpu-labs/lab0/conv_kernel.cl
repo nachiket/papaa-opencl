@@ -5,7 +5,7 @@ __kernel void conv_local(
     __global float *out,              // W*H output images
     const int nFilterWidth,
     const int nFilterHeight,
-    __global const float* pBias,
+	const float bias,
     __local float * image_buff)                // constant offset/bias
 {
 
@@ -16,8 +16,6 @@ __kernel void conv_local(
 
     const int ImWidth  = get_global_size(0);
     const int ImHeight = get_global_size(1);
-    const int OWidth   = ImWidth - nFilterWidth +1;
-    const int OHeight  = ImHeight - nFilterHeight +1;
 
 /*    __local float local_filt[ FILTER_SIZE* FILTER_SIZE];
     if(x < nFilterWidth*nFilterHeight)
@@ -40,6 +38,6 @@ __kernel void conv_local(
             sum += filt[r*nFilterWidth + c]*image_buff[(y + r) * ImWidth + x + c];
         }
     }
-    out[row * ImWidth + x] = sum + *pBias;
+    out[row * ImWidth + x] = sum + bias;
 }
 
