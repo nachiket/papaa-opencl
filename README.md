@@ -1,4 +1,4 @@
-# OpenCL Labs for PAPAA Summer School
+# OpenCL Labs for PAPAA Summer School 2016 Edition
 ## Gopalakrishna Hegde, Nachiappan Ramasamy, Nachiket Kapre
 
 This repository supports the PAPAA Croucher Summer School 2016 held at the University of Hong Kong between 18th to 22nd July 2016.
