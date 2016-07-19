@@ -16,12 +16,12 @@ __kernel void conv_2d(
 
 	// loop over rows
 	//__attribute__ ((opencl_unroll_hint))
-	#pragma unroll
+	//#pragma unroll
 	for (int r = 0; r < K; r++) 
 	{ 
 		// loop over columns
 		//__attribute__ ((opencl_unroll_hint))
-		#pragma unroll
+		//#pragma unroll
 		for(c = 0; c < K; c++)
 		{
 			sum += filt[r * K + c] * in[(y + r) * W + x + c];
