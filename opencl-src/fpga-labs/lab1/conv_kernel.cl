@@ -16,11 +16,11 @@ void __conv_2d(
     float sum = 0;
         
     // loop over rows
-    __attribute__((xcl_pipeline_workitems))
-    __attribute__((opencl_unroll_hint))
+    //__attribute__((xcl_pipeline_workitems))
+    //__attribute__((opencl_unroll_hint))
     for (int r = 0; r < FILTER_SIZE; r++) 
     {
-        __attribute__((opencl_unroll_hint))
+       // __attribute__((opencl_unroll_hint))
         for(int c = 0; c < FILTER_SIZE; c++)
         {
             sum += filt[r * FILTER_SIZE + c]*in[(j + r) * IMAGE_WIDTH + i + c];

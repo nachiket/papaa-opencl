@@ -3,7 +3,7 @@ create_solution -name lab_2 -dir . -force
 # Target a Xilinx FPGA board
 add_device -vbnv xilinx:adm-pcie-7v3:1ddr:3.0
 
-set host_args "bin_conv2d.xclbin ../../../../../mnist_test_img_0.pgm"
+set host_args "bin_conv2d.xclbin ../../../../../../../imgs/mnist_test_img_0.pgm"
 
 # Host Compiler Flags
 set_property -name host_cflags -value "-g -O0 -std=c++0x -I$::env(PWD)" -objects [current_solution]
