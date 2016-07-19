@@ -6,3 +6,4 @@ In this folder, we provide the set of OpenCL optimization labs for CPUs, GPUs, a
 2. **gpu-labs/** contains one lab that explores the effect of local memory usage on performance on NVIDIA K20 GPU.
 3. **fpga-labs/** contains three labs that explore the effect of kernel datapath optimization, memory layout optimization, and compute unit parallelization on the Xilinx AlphaData card.
 
+For curious gawkers, please look at **isolated-layers/** to inspect OpenCL implementations of a few individual layers relevant to MNIST/Lenet5 model.
