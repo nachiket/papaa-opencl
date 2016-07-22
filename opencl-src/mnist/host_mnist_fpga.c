@@ -1,4 +1,4 @@
-// Modification by Sam Ho, HKU on 22nd July 2016
+// Modification by Sam Ho @sammhho, HKU on 22nd July 2016
 
 #include <stdio.h>
 #include <stdlib.h>
