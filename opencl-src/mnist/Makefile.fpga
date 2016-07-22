@@ -1,0 +1,8 @@
+all:
+	sdaccel compile_mnist.tcl
+clean:
+	rm -f sdaccel*
+	rm -rf mnist
+	rm -rf .Xil
+	rm -rf *.pgm
+

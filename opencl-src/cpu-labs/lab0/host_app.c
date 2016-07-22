@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <CL/cl.h>
-#include <CL/cl_ext.h>
+#include <OpenCL/cl.h>
+#include <OpenCL/cl_ext.h>
 #include "pgm.h"
 
 #define FILTER_SIZE  (3)
@@ -166,11 +166,11 @@ int main(int argc, char** argv)
 		exit(1);
 	}
 
-	localWorkSize[0] = 4;
-	localWorkSize[1] = 4;
-
 	globalWorkSize[0] = input_pgm.width;
 	globalWorkSize[1] = input_pgm.height;
+
+	localWorkSize[0] = 1;
+	localWorkSize[1] = 1;
 
 	/*Enqueue task for parallel execution*/
 	printf("Launching the kernel...\n");

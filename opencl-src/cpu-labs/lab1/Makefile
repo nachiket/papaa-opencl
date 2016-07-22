@@ -1,7 +1,7 @@
 include sources.mk
 CC=gcc
 CFLAGS= -g -O3
-LIBS= -lOpenCL
+LIBS= -framework OpenCL 
 
 exec=lab1_app
 
