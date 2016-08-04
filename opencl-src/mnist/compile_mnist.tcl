@@ -3,7 +3,7 @@ create_solution -name mnist -dir . -force
 # Target a Xilinx FPGA board
 add_device -vbnv xilinx:adm-pcie-7v3:1ddr:3.0
 
-set host_args "-x bin_mnist.xclbin -m sample -i ../../../../../../../imgs/mnist_test_img_0.pgm"
+set host_args "-x bin_mnist.xclbin -m sample -i lena.pgm"
 
 # Host Compiler Flags
 set_property -name host_cflags -value "-g -O0 -std=c++0x -I$::env(PWD) -L/usr/lib/x86_64-linux-gnu/ -lpapi" -objects [current_solution]
