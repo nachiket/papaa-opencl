@@ -6,7 +6,7 @@ add_device -vbnv xilinx:adm-pcie-7v3:1ddr:3.0
 set host_args "-x bin_mnist.xclbin -m sample -i ../../../../../../../imgs/mnist_test_img_0.pgm"
 
 # Host Compiler Flags
-set_property -name host_cflags -value "-g -O0 -std=c++0x -I$::env(PWD)" -objects [current_solution]
+set_property -name host_cflags -value "-g -O0 -std=c++0x -I$::env(PWD) -L/usr/lib/x86_64-linux-gnu/ -lpapi" -objects [current_solution]
 
 add_files "host_mnist_fpga.c"
 add_files "lenet5_model.c"
