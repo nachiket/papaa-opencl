@@ -22,11 +22,11 @@ create_kernel maxpool3D -type clc
 create_kernel iplayer -type clc
 create_kernel relu_layer -type clc
 create_kernel softmax -type clc
-add_files -kernel [get_kernels filter3D] "src/kernels.cl"
-add_files -kernel [get_kernels maxpool3D] "src/kernels.cl"
-add_files -kernel [get_kernels iplayer] "src/kernels.cl"
-add_files -kernel [get_kernels relu_layer] "src/kernels.cl"
-add_files -kernel [get_kernels softmax] "src/kernels.cl"
+add_files -kernel [get_kernels filter3D] "kernels.cl"
+add_files -kernel [get_kernels maxpool3D] "kernels.cl"
+add_files -kernel [get_kernels iplayer] "kernels.cl"
+add_files -kernel [get_kernels relu_layer] "kernels.cl"
+add_files -kernel [get_kernels softmax] "kernels.cl"
 
 # Define Binary Containers
 create_opencl_binary bin_mnist
