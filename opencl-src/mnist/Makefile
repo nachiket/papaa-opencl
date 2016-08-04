@@ -1,9 +1,13 @@
-all:
-	gcc -I/usr/local/include host_mnist.c load_kernel.c lenet5_model.c -g -o mnistcpu -lm -lOpenCL -O3 /usr/local/lib/libpapi.a
-	gcc -DDEVICE_GPU -I/usr/local/include host_mnist.c load_kernel.c lenet5_model.c -g -o mnistgpu -lm -lOpenCL -O3 /usr/local/lib/libpapi.a
-cpu:
-	gcc -I/usr/local/include host_mnist.c load_kernel.c lenet5_model.c -g -o mnistcpu -lm -lOpenCL -O3 /usr/local/lib/libpapi.a
-gpu:
-	gcc -DDEVICE_GPU -I/usr/local/include host_mnist.c load_kernel.c lenet5_model.c  -g -o mnistgpu -lm -lOpenCL -O3 /usr/local/lib/libpapi.a
+all: mnistcpu mnistgpu mnistfpga	
+
+mnistfpga:
+	gcc -DDEVICE_ACC host_mnist_fpga.c load_kernel.c lenet5_model.c -g -o mnistfpga -lm -lOpenCL -O3 -lpapi
+
+mnistcpu:
+	gcc host_mnist.c load_kernel.c lenet5_model.c -g -o mnistcpu -lm -lOpenCL -O3 -lpapi
+
+mnistgpu:
+	gcc -DDEVICE_GPU host_mnist.c load_kernel.c lenet5_model.c  -g -o mnistgpu -lm -lOpenCL -O3 -lpapi
+
 clean:
 	rm -rf mnist* output*

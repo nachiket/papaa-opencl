@@ -12,6 +12,8 @@
 #define POOL_SIZE 2
 #define STRIDE    2
 
+#define DEVICE_ACC 1
+
 typedef float DTYPE;
 
 unsigned int ipgm_img_width, ipgm_img_height;
