@@ -416,7 +416,7 @@ bool init_opencl() {
 	context = clCreateContext(NULL, num_devices, &target_device, &oclContextCallback, NULL, &status);
 	checkError(status, "Failed to create context");
 	
-	std::string binary_file = getBoardBinaryFile("cnn_kernels", target_device);
+	std::string binary_file = getBoardBinaryFile("cnn_kernels.aocx", target_device);
 	printf("Using AOCX: %s\n", binary_file.c_str());
 	program = createProgramFromBinary(context, binary_file.c_str(), &target_device, num_devices);
 	

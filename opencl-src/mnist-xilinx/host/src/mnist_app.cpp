@@ -401,9 +401,9 @@ bool init_opencl() {
 	}
 	
 	// Get the OpenCL platform.
-	platform = findPlatform("Altera");
+	platform = findPlatform("Xilinx");
 	if(platform == NULL) {
-	  printf("ERROR: Unable to find Altera OpenCL platform.\n");
+	  printf("ERROR: Unable to find Xilinx OpenCL platform.\n");
 	  return false;
 	}
 	
@@ -419,7 +419,7 @@ bool init_opencl() {
 	context = clCreateContext(NULL, num_devices, &target_device, &oclContextCallback, NULL, &status);
 	checkError(status, "Failed to create context");
 	
-	std::string binary_file = getBoardBinaryFile("cnn_kernels", target_device);
+	std::string binary_file = getBoardBinaryFile("cnn_kernels.xclbin", target_device);
 	printf("Using AOCX: %s\n", binary_file.c_str());
 	program = createProgramFromBinary(context, binary_file.c_str(), &target_device, num_devices);
 	
