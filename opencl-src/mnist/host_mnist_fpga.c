@@ -220,7 +220,8 @@ int InitDevice()
 			clGetPlatformInfo(platform_ids[i],CL_PLATFORM_NAME,sizeof(name),&name[0],NULL);
 			clGetPlatformInfo(platform_ids[i],CL_PLATFORM_VENDOR,sizeof(vendor),&vendor[0],NULL);
 			clGetPlatformInfo(platform_ids[i],CL_PLATFORM_VERSION,sizeof(version),&version[0],NULL);
-			//printf("Using Platform %s from vendor %s \n Opencl Version Implemented is %s \n",name,vendor,version);
+			printf("Using Platform %s from vendor %s \n Opencl Version Implemented is %s \n",name,vendor,version);
+			fflush(stdout);
 			break;
 	   }
 	}
