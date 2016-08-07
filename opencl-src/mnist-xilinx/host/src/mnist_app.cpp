@@ -173,7 +173,8 @@ void runApplication() {
 	size_t global_work_size[3];
 	size_t local_work_size[3];
 	scoped_array<cl_event> kernel_event(8);
-	const double start_time = getCurrentTimestamp();
+//	const double start_time = getCurrentTimestamp(); -- not compatible with Xilinx
+	const double start_time = 0; 
 
 	setConvKernelArgs(conv1, global_work_size);
 	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[0]);
@@ -210,12 +211,14 @@ void runApplication() {
 	status = clEnqueueNDRangeKernel(queue, kernel[4], 3, NULL, global_work_size, local_work_size, 1, &kernel_event[6], &kernel_event[7]);
 	checkError(status, "Failed to launch smax kernel");
 
-	const double end_time = getCurrentTimestamp();
+//	const double end_time = getCurrentTimestamp(); -- not compatible with Xilinx
+	const double end_time = 0; 
 	const double total_time = end_time - start_time;
 
-	cl_ulong time_ns = getStartEndTime(kernel_event, 8);
-	printf("%ld\n", time_ns);
-	cout << "Kernel time(ms)" << double(time_ns) * 1e-6 << endl;
+//	not compatible with Xilinx
+//	cl_ulong time_ns = getStartEndTime(kernel_event, 8);
+//	printf("%ld\n", time_ns);
+//	cout << "Kernel time(ms)" << double(time_ns) * 1e-6 << endl;
 	cout << "\nTime(ms): " << total_time * 1e3 << endl;
 
 	// Read the final results
