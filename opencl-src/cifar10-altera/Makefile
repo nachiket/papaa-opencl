@@ -82,8 +82,11 @@ $(TARGET_DIR) :
 	$(ECHO)mkdir $(TARGET_DIR)
 
 emu: $(TARGET_DIR)/$(TARGET)
-	CL_CONTEXT_EMULATOR_DEVICE_ALTERA=1 $(TARGET_DIR)/$(TARGET) -img=./cifar10-samples/cifar10_sample_img_0.bmp
+	CL_CONTEXT_EMULATOR_DEVICE_ALTERA=1 $(TARGET_DIR)/$(TARGET) -img=./cifar10-samples/cifar10_sample_img_0.bmp \
+	-mean=./cifar10-samples/cifar10_mean_img.bmp
 
+run:$(TARGET_DIR)/$(TARGET)
+	$(TARGET_DIR)/$(TARGET) -img=./cifar10-samples/cifar10_sample_img_0.bmp
 # Standard make targets
 clean :
 	$(ECHO)rm -f $(TARGET_DIR)/$(TARGET)

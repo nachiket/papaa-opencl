@@ -39,26 +39,35 @@ ActLayer smax;
 
 void initModel(DataShape &inputShape);
 void allocateHostBuffer();
-void initInputImage(const Mat &img, int pad);
+void initInputImage(const Mat &img, const Mat &mean);
 void createDeviceBuffer();
 bool init_opencl();
 void runApplication();
 void cleanup();
 void printNetShapes();
+void zeropadAndTx(const scoped_array<DTYPE> &src, scoped_array<DTYPE> &dst,
+    int n_ch, int src_h, int src_w, int pad_h, int pad_w, cl_mem &device_buff, bool h2d_tx);
+
+template<typename T>
+void showMat(T buff, int n_ch, int h, int w, int to_show=3);
 
 int main(int argc, char **argv) {
-	Mat input_img;
+	Mat input_img, img_mean;
 	DataShape input_shape;
 
 	cout << "CIFAR-10 Classification using Altera FPGA and OpenCL\n";
 	std::string img_path = "";
-	//FIXME: Need to input the image mean and subtract
+	std::string mean_path = "";
 	Options options(argc, argv);
 
 	if(options.has("img")) {
 		img_path = options.get<std::string>("img");
 	}
+	if(options.has("mean")) {
+		mean_path = options.get<std::string>("mean");
+	}
 	cout << img_path << endl;
+	cout << mean_path << endl;
 	input_img = cv::imread(img_path, CV_LOAD_IMAGE_COLOR);
 	if( ! input_img.data) {
 		cout << "Failed to read the image. Specify correct image path" << endl;
@@ -68,20 +77,16 @@ int main(int argc, char **argv) {
 	input_shape.y = input_img.rows;
 	input_shape.z = 3;
 	cout << "Image resolution :" << input_img.cols << "x" << input_img.rows << "x" << input_img.channels() << endl;
-	uint8_t *p_img = (uint8_t *)input_img.data;
-	uint8_t r,g,b;
-	unsigned int no_ch = input_img.channels();
-	for(int row = 0; row < input_img.rows; row++) {
-		for(int col = 0; col < input_img.cols; col++) {
-			b = p_img[row*input_img.cols*no_ch + col*no_ch + 0];
-			g = p_img[row*input_img.cols*no_ch + col*no_ch + 1];
-			r = p_img[row*input_img.cols*no_ch + col*no_ch + 2];
-			//printf("%d,", r);
-		}
-		//printf("\n");
+
+	img_mean = cv::imread(mean_path, CV_LOAD_IMAGE_COLOR);
+	if( ! img_mean.data) {
+		cout << "Failed to read the mean image. Specify correct image path" << endl;
+		return -1;
 	}
+
 	// CNN model parameter init
 	initModel(input_shape);
+
 	printNetShapes();
 	// Host buffer allocation
 	allocateHostBuffer();
@@ -90,19 +95,18 @@ int main(int argc, char **argv) {
 	// Allocate all necessary buffers on the device global memory.
 	createDeviceBuffer();
 	// This will normalize the image and transfer to the device memory
-#if 0
-	initInputImage(input_pgm);
+	initInputImage(input_img, img_mean);
 	// Main application run
 	runApplication();
 	// Release OpenCL objects
-#endif
 	cleanup();
 	return 0;
 }
+
 void setConvKernelArgs(const ConvLayer &conv, size_t *global_ws) {
 	cl_int status;
 	unsigned argi = 0;
-	status = clSetKernelArg(kernel[0], argi++, sizeof(cl_mem), conv.d_input);
+	status = clSetKernelArg(kernel[0], argi++, sizeof(cl_mem), &conv.d_input);
 	checkError(status, "Failed to set argument %d", argi - 1);	
 	status = clSetKernelArg(kernel[0], argi++, sizeof(cl_mem), &conv.d_W);
 	checkError(status, "Failed to set argument %d", argi - 1);	
@@ -184,47 +188,98 @@ void setActKernelArgs(const ActLayer &act, size_t *global_ws) {
     global_ws[2] = act.top_shape.z;
 }
 
-#if 0
 void runApplication() {
 	cl_int status;
 	size_t global_work_size[3];
 	size_t local_work_size[3];
-	scoped_array<cl_event> kernel_event(8);
+	scoped_array<cl_event> kernel_event(12);
 	const double start_time = getCurrentTimestamp();
+
+	zeropadAndTx(h_input_img, conv1.h_input, conv1.bot_shape->z,
+		conv1.bot_shape->y, conv1.bot_shape->x, conv1.pad, conv1.pad, conv1.d_input, true);
+
+	//showMat<scoped_array<DTYPE>& >(h_input_img, conv1.bot_shape->z, conv1.bot_shape->y, conv1.bot_shape->x);
+	//showMat<scoped_array<DTYPE>& >(conv1.h_input, conv1.bot_shape->z, conv1.bot_shape->y+2*conv1.pad, conv1.bot_shape->x+2*conv1.pad);
 
 	setConvKernelArgs(conv1, global_work_size);
 	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[0]);
 	checkError(status, "Failed to launch conv1 kernel");
+///////////////
+	status = clEnqueueReadBuffer(queue, conv1.d_output, CL_TRUE, 0,
+		conv1.top_shape.x * conv1.top_shape.y * conv1.top_shape.z * sizeof(DTYPE), conv1.h_output, 1, &kernel_event[0], NULL);
+	checkError(status, "Failed to read data from the device");
+	showMat<scoped_array<DTYPE>& >(conv1.h_output, conv1.top_shape.z, conv1.top_shape.y, conv1.top_shape.x, 1);
+///////////////
 
 	setPoolKernelArgs(pool1, global_work_size);
 	status = clEnqueueNDRangeKernel(queue, kernel[1], 3, NULL, global_work_size, NULL, 1, &kernel_event[0], &kernel_event[1]);
 	checkError(status, "Failed to launch pool1 kernel");
+///////////////
+	status = clEnqueueReadBuffer(queue, pool1.d_output, CL_TRUE, 0,
+		pool1.top_shape.x * pool1.top_shape.y * pool1.top_shape.z * sizeof(DTYPE), pool1.h_output, 1, &kernel_event[1], NULL);
+	checkError(status, "Failed to read data from the device");
+	showMat<scoped_array<DTYPE>& >(pool1.h_output, pool1.top_shape.z, pool1.top_shape.y, pool1.top_shape.x, 1);
+///////////////
 
+	setActKernelArgs(relu1, global_work_size);
+	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 1, &kernel_event[1], &kernel_event[2]);
+	checkError(status, "Failed to launch relu1 kernel");
+
+	status = clEnqueueReadBuffer(queue, *relu1.d_output, CL_TRUE, 0,
+		relu1.top_shape.x * relu1.top_shape.y * relu1.top_shape.z * sizeof(DTYPE), *relu1.h_output, 1, &kernel_event[2], NULL);
+	checkError(status, "Failed to read data from the device");
+
+	//showMat<scoped_array<DTYPE>& >(conv2.h_input, conv2.bot_shape->z, conv2.bot_shape->y+2*conv2.pad, conv2.bot_shape->x+2*conv2.pad);
+	zeropadAndTx(*relu1.h_output, conv2.h_input, conv2.bot_shape->z,
+		conv2.bot_shape->y, conv2.bot_shape->x, conv2.pad, conv2.pad, conv2.d_input, true);
+	//showMat<scoped_array<DTYPE>& >(conv2.h_input, conv2.bot_shape->z, conv2.bot_shape->y+2*conv2.pad, conv2.bot_shape->x+2*conv2.pad);
+	
 	setConvKernelArgs(conv2, global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 1, &kernel_event[1], &kernel_event[2]);
+	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[3]);
 	checkError(status, "Failed to launch conv2 kernel");
 
+	setActKernelArgs(relu2, global_work_size);
+	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 1, &kernel_event[3], &kernel_event[4]);
+	checkError(status, "Failed to launch relu2 kernel");
+
 	setPoolKernelArgs(pool2, global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[1], 3, NULL, global_work_size, NULL, 1, &kernel_event[2], &kernel_event[3]);
+	status = clEnqueueNDRangeKernel(queue, kernel[1], 3, NULL, global_work_size, NULL, 1, &kernel_event[4], &kernel_event[5]);
+	checkError(status, "Failed to launch pool2 kernel");
+
+	status = clEnqueueReadBuffer(queue, pool2.d_output, CL_TRUE, 0,
+		pool2.top_shape.x * pool2.top_shape.y * pool2.top_shape.z * sizeof(DTYPE), pool2.h_output, 1, &kernel_event[5], NULL);
+	checkError(status, "Failed to read data from the device");
+
+	zeropadAndTx(pool2.h_output, conv3.h_input, conv3.bot_shape->z,
+		conv3.bot_shape->y, conv3.bot_shape->x, conv3.pad, conv3.pad, conv3.d_input, true);
+	//showMat<scoped_array<DTYPE>& >(conv3.h_input, conv3.bot_shape->z, conv3.bot_shape->y+2*conv3.pad, conv3.bot_shape->x+2*conv3.pad);
+
+	setConvKernelArgs(conv3, global_work_size);
+	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[6]);
+	checkError(status, "Failed to launch conv3 kernel");
+
+	setActKernelArgs(relu3, global_work_size);
+	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 1, &kernel_event[6], &kernel_event[7]);
+	checkError(status, "Failed to launch relu2 kernel");
+
+	setPoolKernelArgs(pool3, global_work_size);
+	status = clEnqueueNDRangeKernel(queue, kernel[1], 3, NULL, global_work_size, NULL, 1, &kernel_event[7], &kernel_event[8]);
 	checkError(status, "Failed to launch pool2 kernel");
 
 	setFcKernelArgs(fc1, global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 1, &kernel_event[3], &kernel_event[4]);
+	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 1, &kernel_event[8], &kernel_event[9]);
 	checkError(status, "Failed to launch fc1 kernel");
 
-	setActKernelArgs(relu1, global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 1, &kernel_event[4], &kernel_event[5]);
-	checkError(status, "Failed to launch relu1 kernel");
 
 	setFcKernelArgs(fc2, global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 1, &kernel_event[5], &kernel_event[6]);
+	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 1, &kernel_event[9], &kernel_event[10]);
 	checkError(status, "Failed to launch fc2 kernel");
 
 	setActKernelArgs(smax, global_work_size);
 	local_work_size[0] = global_work_size[0];
 	local_work_size[1] = global_work_size[1];
 	local_work_size[2] = global_work_size[2];
-	status = clEnqueueNDRangeKernel(queue, kernel[4], 3, NULL, global_work_size, local_work_size, 1, &kernel_event[6], &kernel_event[7]);
+	status = clEnqueueNDRangeKernel(queue, kernel[4], 3, NULL, global_work_size, local_work_size, 1, &kernel_event[10], &kernel_event[11]);
 	checkError(status, "Failed to launch smax kernel");
 
 	const double end_time = getCurrentTimestamp();
@@ -244,7 +299,6 @@ void runApplication() {
 		cout << fc2.h_output[i] << endl;
 	}
 }
-#endif
 void print_shape(const std::string name, const DataShape &shape) {
         cout << name << ":" << shape.z <<  "x" << shape.y << "x" << shape.x << endl;
 }
@@ -402,24 +456,32 @@ void allocateHostBuffer() {
 	smax.h_output = smax.h_input;
 }
 
-void initInputImage(const Mat &img, int pad) {
-	cout << "Normalizing the data and transferring to device memory" << endl;
-	cl_int status;
-#if 0
-	// FIXME: handle color images
-	// read image from pgm structure and normalize, populate into host buffer
-	for(unsigned p = 0; p < input_pgm.height * input_pgm.width; p++) {
-		h_input_img[p] = input_pgm.buf[p] / 255.0;
-	}
-	cout << "Transferring image to device memory" << endl;
-	status = clEnqueueWriteBuffer(queue, d_input_img, CL_FALSE,
-        0, conv1.bot_shape->x * conv1.bot_shape->y * conv1.bot_shape->z * sizeof(DTYPE), h_input_img, 0, NULL, NULL);
-	checkError(status, "Failed to transfer input image to the device\n");
-	clFinish(queue);
-#endif
+void initInputImage(const Mat &img, const Mat &mean) {
+    uint8_t *p_img = (uint8_t *)img.data;
+	uint8_t *p_mean = (uint8_t *)mean.data;
+    uint8_t r,g,b, rm, gm, bm;
+	assert(img.channels() == mean.channels() && img.rows == mean.rows && img.cols == mean.cols);
+    unsigned int C = img.channels();
+	unsigned int W = img.cols;
+	unsigned int H = img.rows;
+    for(int row = 0; row < H; row++) {
+        for(int col = 0; col < W; col++) {
+            b = p_img[row*W*C + col*C + 0];
+            g = p_img[row*W*C + col*C + 1];
+            r = p_img[row*W*C + col*C + 2];
+            bm = p_mean[row*W*C + col*C + 0];
+            gm = p_mean[row*W*C + col*C + 1];
+            rm = p_mean[row*W*C + col*C + 2];
+			h_input_img[0*H*W + row*W + col] = (DTYPE)(r - rm);
+			h_input_img[1*H*W + row*W + col] = (DTYPE)(g - rm);
+			h_input_img[2*H*W + row*W + col] = (DTYPE)(b - rm);
+        }
+    }
 }
 
-void zeropadAndTx(const scoped_array<DTYPE> &src, scoped_array<DTYPE> &dst, int n_ch, int src_h, int src_w, int pad_h, int pad_w, cl_mem &device_buff) {
+void zeropadAndTx(const scoped_array<DTYPE> &src, scoped_array<DTYPE> &dst,
+	int n_ch, int src_h, int src_w, int pad_h, int pad_w, cl_mem &device_buff, bool h2d_tx) {
+
 	unsigned dst_h = src_h + 2*pad_h;
 	unsigned dst_w = src_w + 2*pad_w;
 	cl_int status;
@@ -435,10 +497,13 @@ void zeropadAndTx(const scoped_array<DTYPE> &src, scoped_array<DTYPE> &dst, int 
 			}	
 		}
 	}
-	status = clEnqueueWriteBuffer(queue, device_buff, CL_FALSE, 0,
-		n_ch * dst_h * dst_w * sizeof(DTYPE), dst, 0, NULL, NULL);
-	checkError(status, "Failed to transfer data to the device\n");
-	clFinish(queue);
+	if(h2d_tx) {
+		cout << "Sending data to device buffer" << endl;
+		status = clEnqueueWriteBuffer(queue, device_buff, CL_FALSE, 0,
+			n_ch * dst_h * dst_w * sizeof(DTYPE), dst, 0, NULL, NULL);
+		checkError(status, "Failed to transfer data to the device\n");
+		clFinish(queue);
+	}
 }
 
 void allocateConvDeviceBuff(ConvLayer &conv) {
@@ -559,6 +624,19 @@ bool init_opencl() {
 	checkError(status, "Failed to create kernel");
 
 	return true;
+}
+
+template<typename T>
+void showMat(T buff, int n_ch, int h, int w, int to_show=3) {
+	for(unsigned int ch = 0; ch < to_show; ch++) {
+		cout << "Channel: " << ch << endl;
+		for(unsigned int r = 0; r < h; r++) {
+			for(unsigned int c = 0; c < w; c++) {
+				cout << buff[ch*h*w+r*w+c] << ",";
+			}
+			cout << endl;
+		}
+	} 
 }
 
 void freeConvDeviceBuff(const ConvLayer &conv) {
