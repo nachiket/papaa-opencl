@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <fstream>
+#include <unistd.h>
 #include <math.h>
 #include "CL/opencl.h"
 #include "AOCLUtils/aocl_utils.h"
@@ -37,7 +39,7 @@ void allocateHostBuffer();
 void initInputImage(const pgm_t &input_pgm);
 void createDeviceBuffer();
 bool init_opencl();
-void runApplication();
+unsigned int runApplication();
 void cleanup();
 
 int main(int argc, char **argv) {
@@ -45,22 +47,42 @@ int main(int argc, char **argv) {
 	DataShape input_shape;
 
 	cout << "MNSIT Digit Classification using Altera FPGA and OpenCL\n";
-	std::string img_path = "";
-
+	string img_path, mode;
+	string list_file, img_dir;
+	unsigned int no_samples, pred_digit;
+	
 	Options options(argc, argv);
 
-	if(options.has("img")) {
-		img_path = options.get<std::string>("img");
+	if(!options.has("mode")) {
+		cout << "Please specify the application mode(sample OR test)" << endl;
+		exit(1);
+	} else {
+		mode = options.get<string>("mode");
 	}
-	cout << img_path << endl;
-	if(-1 == readPGM(&input_pgm, img_path.c_str())) {
-		cout << "Failed to read the image. Specify correct image path" << endl;
-		return -1;
+	if(mode.compare("sample") == 0) {
+		if(options.has("img")) {
+			img_path = options.get<std::string>("img");
+		} else {
+			cout << "Please specify image path" << endl;
+			exit(1);
+		}
+	} else if(mode.compare("test") == 0) {
+		if(options.has("list") && options.has("dir") && options.has("n")) {
+			list_file = options.get<string>("list");
+			img_dir = options.get<string>("dir");
+			no_samples = options.get<unsigned int>("n");
+		} else {
+			cout << "Need image list file, image directory and no of samples to test" << endl;
+			exit(1);
+		}
+	} else {
+		cout << "Invalid application mode(valid ones are <sample,test>)" << endl;
+		exit(1);
 	}
-	input_shape.x = input_pgm.width;
-	input_shape.y = input_pgm.height;
+
+	input_shape.x = 28;//input_pgm.width;
+	input_shape.y = 28;//input_pgm.height;
 	input_shape.z = 1;
-	cout << "Image resolution :" << input_pgm.height << "x" << input_pgm.width << endl;
 
 	// CNN model parameter init
 	initModel(input_shape);
@@ -70,12 +92,62 @@ int main(int argc, char **argv) {
 	init_opencl();
 	// Allocate all necessary buffers on the device global memory.
 	createDeviceBuffer();
-	// This will normalize the image and transfer to the device memory
-	initInputImage(input_pgm);
-	// Main application run
-	runApplication();
-	// Release image buffer
-	destroyPGM(&input_pgm);
+	if(mode.compare("sample") == 0) {
+		// Sample test mode
+		cout << img_path << endl;
+		if(-1 == readPGM(&input_pgm, img_path.c_str())) {
+			cout << "Failed to read the image. Specify correct image path" << endl;
+			exit(1);
+		}
+		// This will normalize the image and transfer to the device memory
+		initInputImage(input_pgm);
+		// Main application run
+		pred_digit = runApplication();
+		cout << "Predicted digit = " << pred_digit << endl;
+		// Release image buffer
+		destroyPGM(&input_pgm);
+	} else {
+		cout << "Full test mode" << endl;
+		std::ifstream list;
+		std::vector<std::string> test_list;
+		std::vector<unsigned int> target_labels;
+		std::string csv_line, img_file, label;
+
+		list.open(list_file.c_str());
+		while(std::getline(list, csv_line)) {
+			std::stringstream ss(csv_line);
+			std::getline(ss, img_file, ',');
+			std::getline(ss, label, ',');
+			test_list.push_back(img_file);
+			target_labels.push_back(atoi(label.c_str()));
+		}
+		unsigned int testset_size = target_labels.size();
+		if(no_samples < 0 || no_samples > testset_size) {
+			no_samples = testset_size;
+		}
+		cout << "No of samples under test = " << no_samples << endl;
+		unsigned int mis_count = 0;	
+		for(int img = 0; img < no_samples; img++) {
+			img_file = img_dir + "/" + test_list[img];
+			cout << img_file << endl;
+			if(-1 == readPGM(&input_pgm, img_file.c_str())) {
+				cout << "Failed to read image" << endl << img_file << endl;
+			}
+			// This will normalize the image and transfer to the device memory
+			initInputImage(input_pgm);
+			// Main application run
+			pred_digit = runApplication();
+			cout << "Actual = " << target_labels[img] << "Pred = " << pred_digit << endl;
+			if(pred_digit != target_labels[img]) {
+				mis_count++;
+			}
+			// Release image buffer
+			destroyPGM(&input_pgm);
+		}
+		sleep(10);
+		cout << "No images misclassified = " << mis_count << endl;
+		cout << "Classification Error = " << float(mis_count)/no_samples << endl;
+	}
 	// Release OpenCL objects
 	cleanup();
 	return 0;
@@ -165,7 +237,7 @@ void setActKernelArgs(const ActLayer &act, size_t *global_ws) {
     global_ws[2] = act.top_shape.z;
 }
 
-void runApplication() {
+unsigned int runApplication() {
 	cl_int status;
 	size_t global_work_size[3];
 	size_t local_work_size[3];
@@ -211,18 +283,27 @@ void runApplication() {
 	const double total_time = end_time - start_time;
 
 	cl_ulong time_ns = getStartEndTime(kernel_event, 8);
-	printf("%ld\n", time_ns);
-	cout << "Kernel time(ms)" << double(time_ns) * 1e-6 << endl;
-	cout << "\nTime(ms): " << total_time * 1e3 << endl;
+	//printf("%ld\n", time_ns);
+	//cout << "Kernel time(ms)" << double(time_ns) * 1e-6 << endl;
+	//cout << "\nTime(ms): " << total_time * 1e3 << endl;
 
 	// Read the final results
-	cout << "Reading the output from the device" << endl;
+	//cout << "Reading the output from the device" << endl;
 	status = clEnqueueReadBuffer(queue, *smax.d_output, CL_TRUE, 0,
 		smax.top_shape.x * smax.top_shape.y * smax.top_shape.z * sizeof(DTYPE), *smax.h_output, 0, NULL, NULL);
 	checkError(status, "Failed to read data from the device");
-	for(unsigned i = 0; i < 10; i++ ) {
+	/*for(unsigned i = 0; i < 10; i++ ) {
 		cout << fc2.h_output[i] << endl;
+	}*/
+	DTYPE max_prob = 0.0;
+	unsigned int pred = 10;
+	for(unsigned p = 0; p < 10; p++) {
+		if(fc2.h_output[p] > max_prob) {
+			max_prob = fc2.h_output[p];
+			pred = p;
+		}
 	}
+	return pred;
 }
 
 void initModel(DataShape &inputShape) {
@@ -327,10 +408,10 @@ void initInputImage(const pgm_t &input_pgm) {
 		h_input_img[p] = input_pgm.buf[p] / 255.0;
 	}
 	cout << "Transferring image to device memory" << endl;
-	status = clEnqueueWriteBuffer(queue, d_input_img, CL_FALSE,
+	status = clEnqueueWriteBuffer(queue, d_input_img, CL_TRUE,
         0, conv1.bot_shape->x * conv1.bot_shape->y * conv1.bot_shape->z * sizeof(DTYPE), h_input_img, 0, NULL, NULL);
 	checkError(status, "Failed to transfer input image to the device\n");
-	clFinish(queue);
+//	clFinish(queue);
 }
 
 void createDeviceBuffer() {

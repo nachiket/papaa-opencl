@@ -82,10 +82,23 @@ $(TARGET_DIR) :
 	$(ECHO)mkdir $(TARGET_DIR)
 
 emu: $(TARGET_DIR)/$(TARGET)
-	CL_CONTEXT_EMULATOR_DEVICE_ALTERA=1 $(TARGET_DIR)/$(TARGET) -img=./mnist_test_img_0.pgm
+	CL_CONTEXT_EMULATOR_DEVICE_ALTERA=1 $(TARGET_DIR)/$(TARGET) -mode=sample \
+		-img=/home/user/workspace/papaa-opencl/opencl-src/mnist-altera/mnist_test_img_0.pgm
 run: $(TARGET_DIR)/$(TARGET)
-	$(TARGET_DIR)/$(TARGET) -img=./mnist_test_img_0.pgm
+	$(TARGET_DIR)/$(TARGET) -mode=sample \
+		-img=/home/user/workspace/papaa-opencl/opencl-src/mnist-altera/mnist_test_img_0.pgm
 
+test: $(TARGET_DIR)/$(TARGET)
+	CL_CONTEXT_EMULATOR_DEVICE_ALTERA=1 $(TARGET_DIR)/$(TARGET) -mode=test \
+		-dir=/home/user/workspace/papaa-opencl/imgs/mnist-testset \
+		-list=/home/user/workspace/papaa-opencl/imgs/mnist_test_img_list.csv \
+		-n=1000
+
+test-hw: $(TARGET_DIR)/$(TARGET)
+	$(TARGET_DIR)/$(TARGET) -mode=test \
+		-dir=/home/user/workspace/papaa-opencl/imgs/mnist-testset \
+		-list=/home/user/workspace/papaa-opencl/imgs/mnist_test_img_list.csv \
+		-n=10000
 # Standard make targets
 clean :
 	$(ECHO)rm -f $(TARGET_DIR)/$(TARGET)
