@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <unistd.h>
 #include <math.h>
@@ -40,6 +41,9 @@ void initInputImage(const pgm_t &input_pgm);
 void createDeviceBuffer();
 bool init_opencl();
 unsigned int runApplication();
+
+template<typename T>
+void printMap(T &map, unsigned int H, unsigned int W);
 void cleanup();
 
 int main(int argc, char **argv) {
@@ -526,6 +530,18 @@ bool init_opencl() {
 	return true;
 }
 
+template<typename T>
+void printMap(T &map, unsigned int H, unsigned int W) {
+	std::cout << std::fixed;
+	std::cout << std::setprecision(6);
+
+	for(int r = 0; r < H; r++){
+		for(int c = 0; c < W; c++) {
+			cout << map[r*W+c] << ",";
+		}
+		cout << endl;
+	}
+}
 void cleanup() {
 	cout << "Releasing all OpenCL objects" << endl;
 	for(unsigned i = 0; i < num_kernels; ++i) {

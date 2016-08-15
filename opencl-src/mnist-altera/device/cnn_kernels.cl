@@ -60,6 +60,18 @@ __kernel void maxpool3D(
         const int oWidth  = get_global_size(0);
         const int oHeight = get_global_size(1);
 
+	float maxval = -3.402823e+37;
+	int hstart = y*nStride;
+	int wstart = x*nStride;
+	int hend = min(hstart+nPoolsize, iHeight);
+	int wend = min(wstart+nPoolsize, iWidth);
+	for(unsigned int r = hstart; r < hend; r++) {
+		for(unsigned int c = wstart; c < wend; c++) {
+			unsigned int idx = z*iHeight*iWidth + r * iWidth + c;
+			maxval = fmax(maxval, pInput[idx]);
+		}
+	}
+/*
         const int xidx = nStride*x;
         const int yidx = nStride*y;
         float maxval =0.0;
@@ -70,10 +82,9 @@ __kernel void maxpool3D(
                 {
                         const int idxIn = idxIntmp + c;
                         maxval = fmax(maxval,pInput[idxIn]);
-//                      if(pInput[idxIn]>maxval)
-//                              maxval = pInput[idxIn];
                 }
         }
+*/
         pOutput[(((z*oHeight)+y)*oWidth)+x] = maxval;
 }
 
