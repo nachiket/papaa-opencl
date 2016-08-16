@@ -24,7 +24,8 @@ cl_command_queue queue;
 cl_program program = NULL;
 scoped_array<cl_kernel> kernel;
 
-scoped_array<DTYPE> h_input_img;
+//scoped_array<DTYPE> h_input_img;
+scoped_aligned_ptr<DTYPE> h_input_img;
 ConvLayer conv1;
 PoolLayer pool1;
 ConvLayer conv2;
@@ -148,7 +149,6 @@ int main(int argc, char **argv) {
 			// Release image buffer
 			destroyPGM(&input_pgm);
 		}
-		sleep(10);
 		cout << "No images misclassified = " << mis_count << endl;
 		cout << "Classification Error = " << float(mis_count)/no_samples << endl;
 	}

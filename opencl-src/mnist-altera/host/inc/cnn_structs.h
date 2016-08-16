@@ -33,8 +33,10 @@ typedef struct {
 	DataShape top_shape;
 	unsigned int K;
 	unsigned int stride;
-	scoped_array<DTYPE> h_output;
-	scoped_array<DTYPE> *h_input;
+	//scoped_array<DTYPE> h_output;
+	//scoped_array<DTYPE> *h_input;
+	scoped_aligned_ptr<DTYPE> h_output;
+	scoped_aligned_ptr<DTYPE> *h_input;
 	cl_mem d_output;
 	cl_mem *d_input;
 	WTYPE *W;
@@ -48,8 +50,10 @@ typedef struct {
         DataShape top_shape;
         unsigned int winSize;
         unsigned int stride;
-        scoped_array<DTYPE> h_output;
-        scoped_array<DTYPE> *h_input;
+        //scoped_array<DTYPE> h_output;
+        //scoped_array<DTYPE> *h_input;
+	scoped_aligned_ptr<DTYPE> h_output;
+	scoped_aligned_ptr<DTYPE> *h_input;
 	cl_mem d_output;
 	cl_mem *d_input;
 	PoolType type;
@@ -59,8 +63,10 @@ typedef struct {
         DataShape *bot_shape;
         DataShape top_shape;
 	unsigned int no_units;
-        scoped_array<DTYPE> h_output;
-        scoped_array<DTYPE> *h_input;
+        //scoped_array<DTYPE> h_output;
+        //scoped_array<DTYPE> *h_input;
+	scoped_aligned_ptr<DTYPE> h_output;
+	scoped_aligned_ptr<DTYPE> *h_input;
 	cl_mem d_output;
 	cl_mem *d_input;
 	WTYPE *W;
@@ -73,8 +79,10 @@ typedef struct {
         DataShape *bot_shape;
         DataShape top_shape;
 	// ActLayer ops are in-place. No need to allocate separate buffer
-        scoped_array<DTYPE> *h_output;
-        scoped_array<DTYPE> *h_input;
+        //scoped_array<DTYPE> *h_output;
+        //scoped_array<DTYPE> *h_input;
+	scoped_aligned_ptr<DTYPE> *h_output;
+	scoped_aligned_ptr<DTYPE> *h_input;
 	cl_mem *d_output;
 	cl_mem *d_input;
 	ActType type;
