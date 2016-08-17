@@ -220,8 +220,6 @@ void printError(cl_int error) {
   }
 }
 
-void cleanup();
-
 // Print line, file name, and error code if there is an error. Exits the
 // application upon error.
 void _checkError(int line,
@@ -247,9 +245,6 @@ void _checkError(int line,
     cleanup();
     exit(error);
   }
-}
-
-void cleanup() {
 }
 
 // Sets the current working directory to be the same as the directory
@@ -446,8 +441,7 @@ bool fileExists(const char *file_name) {
 
 std::string getBoardBinaryFile(const char *prefix, cl_device_id device) {
   // First check if <prefix>.aocx exists. Use it if it does.
-  // Nachiket removed .aocx check to make this work with .xclbin
-  std::string file_name = std::string(prefix);
+  std::string file_name = std::string(prefix) + ".aocx";
   if(fileExists(file_name.c_str())) {
     return file_name;
   }

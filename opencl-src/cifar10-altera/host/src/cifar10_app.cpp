@@ -600,7 +600,6 @@ bool init_opencl() {
 	std::string binary_file = getBoardBinaryFile("cnn_kernels", target_device);
 	printf("Using AOCX: %s\n", binary_file.c_str());
 	program = createProgramFromBinary(context, binary_file.c_str(), &target_device, num_devices);
-	
 	// Build the program that was just created.
 	status = clBuildProgram(program, 0, NULL, "", NULL, NULL);
 	checkError(status, "Failed to build program");
@@ -622,7 +621,7 @@ bool init_opencl() {
 	checkError(status, "Failed to create kernel");
 	kernel[4] = clCreateKernel(program, "softmax", &status);
 	checkError(status, "Failed to create kernel");
-
+	cout << "OpenCL init done" << endl;
 	return true;
 }
 
