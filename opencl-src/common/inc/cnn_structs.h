@@ -33,12 +33,11 @@ typedef struct {
 	DataShape top_shape;
 	unsigned int K;
 	unsigned int stride;
-	//scoped_array<DTYPE> h_output;
-	//scoped_array<DTYPE> *h_input;
+	unsigned int pad;
 	scoped_aligned_ptr<DTYPE> h_output;
-	scoped_aligned_ptr<DTYPE> *h_input;
+	scoped_aligned_ptr<DTYPE> h_input;
 	cl_mem d_output;
-	cl_mem *d_input;
+	cl_mem d_input;
 	WTYPE *W;
 	WTYPE *b;
 	cl_mem d_W;
@@ -46,25 +45,22 @@ typedef struct {
 } ConvLayer;
 
 typedef struct {
-        DataShape *bot_shape;
-        DataShape top_shape;
-        unsigned int winSize;
-        unsigned int stride;
-        //scoped_array<DTYPE> h_output;
-        //scoped_array<DTYPE> *h_input;
+	DataShape *bot_shape;
+	DataShape top_shape;
+	unsigned int winSize;
+	unsigned int stride;
+	unsigned int pad;
 	scoped_aligned_ptr<DTYPE> h_output;
-	scoped_aligned_ptr<DTYPE> *h_input;
+	scoped_aligned_ptr<DTYPE> h_input;
 	cl_mem d_output;
 	cl_mem *d_input;
 	PoolType type;
 } PoolLayer;
 
 typedef struct {
-        DataShape *bot_shape;
-        DataShape top_shape;
+	DataShape *bot_shape;
+	DataShape top_shape;
 	unsigned int no_units;
-        //scoped_array<DTYPE> h_output;
-        //scoped_array<DTYPE> *h_input;
 	scoped_aligned_ptr<DTYPE> h_output;
 	scoped_aligned_ptr<DTYPE> *h_input;
 	cl_mem d_output;
@@ -76,11 +72,9 @@ typedef struct {
 } FcLayer;
 
 typedef struct {
-        DataShape *bot_shape;
-        DataShape top_shape;
+	DataShape *bot_shape;
+	DataShape top_shape;
 	// ActLayer ops are in-place. No need to allocate separate buffer
-        //scoped_array<DTYPE> *h_output;
-        //scoped_array<DTYPE> *h_input;
 	scoped_aligned_ptr<DTYPE> *h_output;
 	scoped_aligned_ptr<DTYPE> *h_input;
 	cl_mem *d_output;

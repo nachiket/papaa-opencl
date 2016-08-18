@@ -156,10 +156,16 @@ int main(int argc, char **argv) {
 	cleanup();
 	return 0;
 }
-void setConvKernelArgs(const ConvLayer &conv, size_t *global_ws) {
+
+// The input buffer to conv layer is directly taken from output buffer of previous layer.
+// This can be done when we do not need to read the previous layer output to the host 
+// memory and pad it and then transfer it back to device memory. In case of Lenet5 there is
+// no padding for conv layers. Hence the output of previous layer is directly taken.
+// The 3rd argument serves this purpose.
+void setConvKernelArgs(const ConvLayer &conv, size_t *global_ws, cl_mem &in_buff) {
 	cl_int status;
 	unsigned argi = 0;
-	status = clSetKernelArg(kernel[0], argi++, sizeof(cl_mem), conv.d_input);
+	status = clSetKernelArg(kernel[0], argi++, sizeof(cl_mem), &in_buff);
 	checkError(status, "Failed to set argument %d", argi - 1);	
 	status = clSetKernelArg(kernel[0], argi++, sizeof(cl_mem), &conv.d_W);
 	checkError(status, "Failed to set argument %d", argi - 1);	
@@ -248,7 +254,7 @@ unsigned int runApplication() {
 	scoped_array<cl_event> kernel_event(8);
 	const double start_time = getCurrentTimestamp();
 
-	setConvKernelArgs(conv1, global_work_size);
+	setConvKernelArgs(conv1, global_work_size, d_input_img);
 	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[0]);
 	checkError(status, "Failed to launch conv1 kernel");
 
@@ -256,7 +262,7 @@ unsigned int runApplication() {
 	status = clEnqueueNDRangeKernel(queue, kernel[1], 3, NULL, global_work_size, NULL, 1, &kernel_event[0], &kernel_event[1]);
 	checkError(status, "Failed to launch pool1 kernel");
 
-	setConvKernelArgs(conv2, global_work_size);
+	setConvKernelArgs(conv2, global_work_size, pool1.d_output);
 	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 1, &kernel_event[1], &kernel_event[2]);
 	checkError(status, "Failed to launch conv2 kernel");
 
@@ -317,6 +323,7 @@ void initModel(DataShape &inputShape) {
 	conv1.W = (WTYPE *)conv1_weights;
 	conv1.b = (WTYPE *)conv1_bias;
 	conv1.stride = 1;
+	conv1.pad = 0;
 	conv1.top_shape.z = CONV1_NO_OUTPUTS;
 	conv1.top_shape.x = conv1.bot_shape->x - conv1.K + 1;
 	conv1.top_shape.y = conv1.bot_shape->y - conv1.K + 1;
@@ -334,6 +341,7 @@ void initModel(DataShape &inputShape) {
 	conv2.W = (WTYPE *)conv2_weights;
 	conv2.b = (WTYPE *)conv2_bias;
 	conv2.stride = 1;
+	conv2.pad = 0;
 	conv2.top_shape.z = CONV2_NO_OUTPUTS;
 	conv2.top_shape.x = conv2.bot_shape->x - conv2.K + 1;
 	conv2.top_shape.y = conv2.bot_shape->y - conv2.K + 1;
@@ -378,16 +386,16 @@ void initModel(DataShape &inputShape) {
 void allocateHostBuffer() {
 	cout << "Allocating host memory for inputs and outputs\n";
 	h_input_img.reset(conv1.bot_shape->x * conv1.bot_shape->y * conv1.bot_shape->z);
-	conv1.h_input = &h_input_img;
+	conv1.h_input.reset(conv1.bot_shape->x * conv1.bot_shape->y * conv1.bot_shape->z);
 	conv1.h_output.reset(conv1.top_shape.x * conv1.top_shape.y * conv1.top_shape.z);
 
-	pool1.h_input = &conv1.h_output;
+	pool1.h_input.reset(pool1.bot_shape->x * pool1.bot_shape->y * pool1.bot_shape->z);
 	pool1.h_output.reset(pool1.top_shape.x * pool1.top_shape.y * pool1.top_shape.z);
 
-	conv2.h_input = &pool1.h_output;
+	conv2.h_input.reset(conv2.bot_shape->x * conv2.bot_shape->y * conv2.bot_shape->z);
 	conv2.h_output.reset(conv2.top_shape.x * conv2.top_shape.y * conv2.top_shape.z);
 
-	pool2.h_input = &conv2.h_output;
+	pool2.h_input.reset(pool2.bot_shape->x * pool2.bot_shape->y * pool2.bot_shape->z);
 	pool2.h_output.reset(pool2.top_shape.x * pool2.top_shape.y * pool2.top_shape.z);
 
 	fc1.h_input = &pool2.h_output;
@@ -425,7 +433,8 @@ void createDeviceBuffer() {
 	// data is allocated in BANK1 and weights are in BANK2 for efficient access.
 	d_input_img = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_BANK_1_ALTERA, 
 		conv1.bot_shape->x * conv1.bot_shape->y  * conv1.bot_shape->z * sizeof(DTYPE), NULL, &status);
-	conv1.d_input = &d_input_img;
+    conv1.d_input = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_1_ALTERA,
+		(conv1.bot_shape->x+2*conv1.pad) * (conv1.bot_shape->y+2*conv1.pad) * conv1.bot_shape->z * sizeof(DTYPE), NULL, &status);
 	conv1.d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_1_ALTERA, 
 		conv1.top_shape.x * conv1.top_shape.y  * conv1.top_shape.z * sizeof(DTYPE), NULL, &status);
 	
@@ -436,7 +445,8 @@ void createDeviceBuffer() {
 	pool1.d_input = &conv1.d_output;
 	pool1.d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_1_ALTERA, 
 		pool1.top_shape.x * pool1.top_shape.y  * pool1.top_shape.z * sizeof(DTYPE), NULL, &status);
-	conv2.d_input = &pool1.d_output;
+    conv2.d_input = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_1_ALTERA,
+		(conv2.bot_shape->x+2*conv2.pad) * (conv2.bot_shape->y+2*conv2.pad) * conv2.bot_shape->z * sizeof(DTYPE), NULL, &status);
 	conv2.d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_1_ALTERA, 
 		conv2.top_shape.x * conv2.top_shape.y  * conv2.top_shape.z * sizeof(DTYPE), NULL, &status);
 	
@@ -501,7 +511,7 @@ bool init_opencl() {
 	context = clCreateContext(NULL, num_devices, &target_device, &oclContextCallback, NULL, &status);
 	checkError(status, "Failed to create context");
 	
-	std::string binary_file = getBoardBinaryFile("cnn_kernels.aocx", target_device);
+	std::string binary_file = getBoardBinaryFile("cnn_kernels", target_device);
 	printf("Using AOCX: %s\n", binary_file.c_str());
 	program = createProgramFromBinary(context, binary_file.c_str(), &target_device, num_devices);
 	
@@ -551,10 +561,12 @@ void cleanup() {
 	}
 	clReleaseMemObject(d_input_img);
 	clReleaseMemObject(conv1.d_output);
+	clReleaseMemObject(conv1.d_input);
 	clReleaseMemObject(conv1.d_W);
 	clReleaseMemObject(conv1.d_b);
 	clReleaseMemObject(pool1.d_output);
 	clReleaseMemObject(conv2.d_output);
+	clReleaseMemObject(conv2.d_input);
 	clReleaseMemObject(conv2.d_W);
 	clReleaseMemObject(conv1.d_b);
 	clReleaseMemObject(pool2.d_output);

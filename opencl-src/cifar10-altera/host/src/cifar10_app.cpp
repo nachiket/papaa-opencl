@@ -23,7 +23,7 @@ cl_command_queue queue;
 cl_program program = NULL;
 scoped_array<cl_kernel> kernel;
 
-scoped_array<DTYPE> h_input_img;
+scoped_aligned_ptr<DTYPE> h_input_img;
 ConvLayer conv1;
 PoolLayer pool1;
 ActLayer relu1;
@@ -45,7 +45,7 @@ bool init_opencl();
 void runApplication();
 void cleanup();
 void printNetShapes();
-void zeropadAndTx(const scoped_array<DTYPE> &src, scoped_array<DTYPE> &dst,
+void zeropadAndTx(const scoped_aligned_ptr<DTYPE> &src, scoped_aligned_ptr<DTYPE> &dst,
     int n_ch, int src_h, int src_w, int pad_h, int pad_w, cl_mem &device_buff, bool h2d_tx);
 
 template<typename T>
@@ -198,8 +198,8 @@ void runApplication() {
 	zeropadAndTx(h_input_img, conv1.h_input, conv1.bot_shape->z,
 		conv1.bot_shape->y, conv1.bot_shape->x, conv1.pad, conv1.pad, conv1.d_input, true);
 
-	//showMat<scoped_array<DTYPE>& >(h_input_img, conv1.bot_shape->z, conv1.bot_shape->y, conv1.bot_shape->x);
-	//showMat<scoped_array<DTYPE>& >(conv1.h_input, conv1.bot_shape->z, conv1.bot_shape->y+2*conv1.pad, conv1.bot_shape->x+2*conv1.pad);
+	//showMat<scoped_aligned_ptr<DTYPE>& >(h_input_img, conv1.bot_shape->z, conv1.bot_shape->y, conv1.bot_shape->x);
+	//showMat<scoped_aligned_ptr<DTYPE>& >(conv1.h_input, conv1.bot_shape->z, conv1.bot_shape->y+2*conv1.pad, conv1.bot_shape->x+2*conv1.pad);
 
 	setConvKernelArgs(conv1, global_work_size);
 	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[0]);
@@ -208,7 +208,7 @@ void runApplication() {
 	status = clEnqueueReadBuffer(queue, conv1.d_output, CL_TRUE, 0,
 		conv1.top_shape.x * conv1.top_shape.y * conv1.top_shape.z * sizeof(DTYPE), conv1.h_output, 1, &kernel_event[0], NULL);
 	checkError(status, "Failed to read data from the device");
-	showMat<scoped_array<DTYPE>& >(conv1.h_output, conv1.top_shape.z, conv1.top_shape.y, conv1.top_shape.x, 1);
+	showMat<scoped_aligned_ptr<DTYPE>& >(conv1.h_output, conv1.top_shape.z, conv1.top_shape.y, conv1.top_shape.x, 1);
 ///////////////
 
 	setPoolKernelArgs(pool1, global_work_size);
@@ -218,7 +218,7 @@ void runApplication() {
 	status = clEnqueueReadBuffer(queue, pool1.d_output, CL_TRUE, 0,
 		pool1.top_shape.x * pool1.top_shape.y * pool1.top_shape.z * sizeof(DTYPE), pool1.h_output, 1, &kernel_event[1], NULL);
 	checkError(status, "Failed to read data from the device");
-	showMat<scoped_array<DTYPE>& >(pool1.h_output, pool1.top_shape.z, pool1.top_shape.y, pool1.top_shape.x, 1);
+	showMat<scoped_aligned_ptr<DTYPE>& >(pool1.h_output, pool1.top_shape.z, pool1.top_shape.y, pool1.top_shape.x, 1);
 ///////////////
 
 	setActKernelArgs(relu1, global_work_size);
@@ -229,10 +229,10 @@ void runApplication() {
 		relu1.top_shape.x * relu1.top_shape.y * relu1.top_shape.z * sizeof(DTYPE), *relu1.h_output, 1, &kernel_event[2], NULL);
 	checkError(status, "Failed to read data from the device");
 
-	//showMat<scoped_array<DTYPE>& >(conv2.h_input, conv2.bot_shape->z, conv2.bot_shape->y+2*conv2.pad, conv2.bot_shape->x+2*conv2.pad);
+	//showMat<scoped_aligned_ptr<DTYPE>& >(conv2.h_input, conv2.bot_shape->z, conv2.bot_shape->y+2*conv2.pad, conv2.bot_shape->x+2*conv2.pad);
 	zeropadAndTx(*relu1.h_output, conv2.h_input, conv2.bot_shape->z,
 		conv2.bot_shape->y, conv2.bot_shape->x, conv2.pad, conv2.pad, conv2.d_input, true);
-	//showMat<scoped_array<DTYPE>& >(conv2.h_input, conv2.bot_shape->z, conv2.bot_shape->y+2*conv2.pad, conv2.bot_shape->x+2*conv2.pad);
+	//showMat<scoped_aligned_ptr<DTYPE>& >(conv2.h_input, conv2.bot_shape->z, conv2.bot_shape->y+2*conv2.pad, conv2.bot_shape->x+2*conv2.pad);
 	
 	setConvKernelArgs(conv2, global_work_size);
 	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[3]);
@@ -252,7 +252,7 @@ void runApplication() {
 
 	zeropadAndTx(pool2.h_output, conv3.h_input, conv3.bot_shape->z,
 		conv3.bot_shape->y, conv3.bot_shape->x, conv3.pad, conv3.pad, conv3.d_input, true);
-	//showMat<scoped_array<DTYPE>& >(conv3.h_input, conv3.bot_shape->z, conv3.bot_shape->y+2*conv3.pad, conv3.bot_shape->x+2*conv3.pad);
+	//showMat<scoped_aligned_ptr<DTYPE>& >(conv3.h_input, conv3.bot_shape->z, conv3.bot_shape->y+2*conv3.pad, conv3.bot_shape->x+2*conv3.pad);
 
 	setConvKernelArgs(conv3, global_work_size);
 	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[6]);
@@ -479,7 +479,7 @@ void initInputImage(const Mat &img, const Mat &mean) {
     }
 }
 
-void zeropadAndTx(const scoped_array<DTYPE> &src, scoped_array<DTYPE> &dst,
+void zeropadAndTx(const scoped_aligned_ptr<DTYPE> &src, scoped_aligned_ptr<DTYPE> &dst,
 	int n_ch, int src_h, int src_w, int pad_h, int pad_w, cl_mem &device_buff, bool h2d_tx) {
 
 	unsigned dst_h = src_h + 2*pad_h;
