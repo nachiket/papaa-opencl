@@ -520,9 +520,9 @@ void allocateConvDeviceBuff(ConvLayer &conv) {
 		conv.top_shape.z * sizeof(WTYPE), conv.b, &status);
 }
 
-void allocateFcDeviceBuff(FcLayer &fc) {
+void allocateFcDeviceBuff(FcLayer &fc, cl_mem &prev_output) {
 	cl_int status;
-	fc.d_input = &pool3.d_output;
+	fc.d_input = &prev_output;
 	fc.d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_1_ALTERA, 
 		fc.top_shape.x * fc.top_shape.y  * fc.top_shape.z * sizeof(DTYPE), NULL, &status);
 	fc.d_W = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_BANK_2_ALTERA | CL_MEM_COPY_HOST_PTR, 
@@ -559,8 +559,8 @@ void createDeviceBuffer() {
 	pool3.d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_1_ALTERA, 
 		pool3.top_shape.x * pool3.top_shape.y  * pool3.top_shape.z * sizeof(DTYPE), NULL, &status);
 
-	allocateFcDeviceBuff(fc1);
-	allocateFcDeviceBuff(fc2);
+	allocateFcDeviceBuff(fc1, pool3.d_output);
+	allocateFcDeviceBuff(fc2, fc1.d_output);
 	
 	smax.d_input = &fc2.d_output;
 	smax.d_output = smax.d_input;
