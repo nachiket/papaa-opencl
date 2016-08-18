@@ -82,5 +82,19 @@ typedef struct {
 	ActType type;
 } ActLayer;
 
+typedef struct {
+	DataShape *bot_shape;
+	DataShape top_shape;
+	scoped_aligned_ptr<DTYPE> h_output;
+	scoped_aligned_ptr<DTYPE> *h_input;
+	cl_mem d_output;
+	cl_mem *d_input;
+	// scale = gamma * inv_std. These 2 params are combined to reduce the dynamic range during inference time.
+	WTYPE *scale;
+	// offset = -mean * inv_std * gamma + beta
+	WTYPE *offset;
+	cl_mem d_scale;
+	cl_mem d_offset;
+} BatchNormLayer;
 #endif // CNN_STRUCTS_H
 

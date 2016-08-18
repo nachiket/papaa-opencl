@@ -80,7 +80,8 @@ $(TARGET_DIR)/$(TARGET) : Makefile $(SRCS) $(INCS) $(TARGET_DIR)
 
 $(TARGET_DIR) :
 	$(ECHO)mkdir $(TARGET_DIR)
-
+emu: $(TARGET_DIR)/$(TARGET)
+	$(TARGET_DIR)/$(TARGET) -m sample
 # Standard make targets
 clean :
 	$(ECHO)rm -f $(TARGET_DIR)/$(TARGET)

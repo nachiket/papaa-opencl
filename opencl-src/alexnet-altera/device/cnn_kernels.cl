@@ -1,20 +1,22 @@
+//FIXME: If taking trained model from Lasagne, the conv filters flipped by default.
+//Either perform flip here OR disable flip during training !!!
 __kernel void conv_3d(
 	const __global float *p_maps,
 	const __global float *p_weights,
 	const __global float *p_bias,
 	__global float * p_output,
-	const int K,
-	const int stride,
-	const int no_inputs) {
+	const unsigned int K,
+	const unsigned int stride,
+	const unsigned int no_inputs) {
 
-        const int x = get_global_id(0); 
-        const int y = get_global_id(1);
-        const int z = get_global_id(2);
-
-        const int out_width  = get_global_size(0);
-        const int out_height = get_global_size(1);
-        const int in_width = out_width + K - 1;
-        const int in_height = out_height + K - 1;
+	const int x = get_global_id(0); 
+	const int y = get_global_id(1);
+	const int z = get_global_id(2);
+	
+	const int out_width  = get_global_size(0);
+	const int out_height = get_global_size(1);
+	const int in_width = out_width + K - 1;
+	const int in_height = out_height + K - 1;
 
 	// Assume horizontal and vertical strides are same. Generally this is the case.
 	// Same assumptions holds good for kernel dimensions as well.
