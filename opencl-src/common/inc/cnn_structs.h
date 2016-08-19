@@ -96,5 +96,17 @@ typedef struct {
 	cl_mem d_scale;
 	cl_mem d_offset;
 } BatchNormLayer;
+
+typedef struct {
+	DataShape *bot_shape;
+	DataShape top_shape_0;
+	DataShape top_shape_1;
+} SliceLayer;
+
+typedef struct {
+	DataShape *bot_shape_0;
+	DataShape *bot_shape_1;
+	DataShape top_shape_0;
+} ConcatLayer;
 #endif // CNN_STRUCTS_H
 

@@ -158,3 +158,28 @@ void allocNormHostBuff(BatchNormLayer &norm, scoped_aligned_ptr<DTYPE> &prev_h_o
 	norm.h_input = &prev_h_output;
 	norm.h_output.reset(norm.top_shape.x * norm.top_shape.y * norm.top_shape.z);
 }
+
+void freeConvDevBuff(const ConvLayer &conv) {
+
+	clReleaseMemObject(conv.d_input);
+	clReleaseMemObject(conv.d_output);
+	clReleaseMemObject(conv.d_W);
+	clReleaseMemObject(conv.d_b);
+}
+
+void freeFcDevBuff(const FcLayer &fc) {
+	clReleaseMemObject(fc.d_output);
+	clReleaseMemObject(fc.d_W);
+	clReleaseMemObject(fc.d_b);
+}
+
+void freePoolDevBuff(const PoolLayer &pool) {
+	clReleaseMemObject(pool.d_output);
+}
+
+void freeBatchNormDevBuff(const BatchNormLayer &norm) {
+	clReleaseMemObject(norm.d_output);
+	clReleaseMemObject(norm.d_scale);
+	clReleaseMemObject(norm.d_offset);
+}
+

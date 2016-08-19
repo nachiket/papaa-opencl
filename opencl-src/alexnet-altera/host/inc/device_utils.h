@@ -29,4 +29,12 @@ void allocPoolHostBuff(PoolLayer &pool);
 void allocFcHostBuff(FcLayer &fc, scoped_aligned_ptr<DTYPE> &prev_h_output);
 
 void allocNormHostBuff(BatchNormLayer &norm, scoped_aligned_ptr<DTYPE> &prev_h_output);
+
+void freeConvDevBuff(const ConvLayer &conv);
+
+void freeFcDevBuff(const FcLayer &fc);
+
+void freePoolDevBuff(const PoolLayer &pool);
+
+void freeBatchNormDevBuff(const BatchNormLayer &norm);
 #endif// _KERNEL_UTILS_H_
