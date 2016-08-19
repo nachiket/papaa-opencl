@@ -1,39 +1,41 @@
 #include "data_utils.h"
+#include <iostream>
+
+
 template<typename T>
 void showMat(T buff, int n_ch, int h, int w, int to_show=3) {
 	for(unsigned int ch = 0; ch < to_show; ch++) {
-		cout << "Channel: " << ch << endl;
+		std::cout << "Channel: " << ch << std::endl;
 		for(unsigned int r = 0; r < h; r++) {
 			for(unsigned int c = 0; c < w; c++) {
-				cout << buff[ch*h*w+r*w+c] << ",";
+				std::cout << buff[ch*h*w+r*w+c] << ",";
 			}
-			cout << endl;
+			std::cout << std::endl;
 		}
 	} 
 }
 
-Mat & cropImage(const Mat &img, unsigned int H, unsigned int W, CROP_TYPE_E type) {
+void cropImage(const cv::Mat &img, cv::Mat &crop_img, unsigned int H, unsigned int W, CROP_TYPE_E type) {
 		switch(type) {
 			case CENTER:
 			{
 				int top_x = (img.cols - W)/2;
 				int top_y = (img.rows - W)/2;
-				Rect window(top_x, top_y, W, H);
-				Mat crop_img = img(window);
-				return crop_img;
+				cv::Rect window(top_x, top_y, W, H);
+				crop_img = img(window);
 				break;
 			}
 			case RAND:
-				cout << "Not implemented" << endl;
+				std::cout << "Not implemented" << std::endl;
 				exit(1);
 				break;
 			default:
-				cout << "Invalid crop type" << endl;
+				std::cout << "Invalid crop type" << std::endl;
 				exit(1);
 		}
 }
 
-void initInputImage(const Mat &img, const Mat &mean, scoped_aligned_ptr<DTYPE> &h_input_img) {
+void initInputImage(const cv::Mat &img, const cv::Mat &mean, aocl_utils::scoped_aligned_ptr<DTYPE> &h_input_img) {
     uint8_t *p_img = (uint8_t *)img.data;
 	uint8_t *p_mean = (uint8_t *)mean.data;
     uint8_t r,g,b, rm, gm, bm;
@@ -56,8 +58,8 @@ void initInputImage(const Mat &img, const Mat &mean, scoped_aligned_ptr<DTYPE> &
     }
 }
 
-void zeropadAndTx(const scoped_aligned_ptr<DTYPE> &src, scoped_aligned_ptr<DTYPE> &dst,
-	int n_ch, int src_h, int src_w, int pad_h, int pad_w, cl_mem &device_buff, bool h2d_tx) {
+void zeropadAndTx(const aocl_utils::scoped_aligned_ptr<DTYPE> &src, aocl_utils::scoped_aligned_ptr<DTYPE> &dst,
+	int n_ch, int src_h, int src_w, int pad_h, int pad_w, cl_mem &device_buff, cl_command_queue &queue, bool h2d_tx) {
 
 	unsigned dst_h = src_h + 2*pad_h;
 	unsigned dst_w = src_w + 2*pad_w;
@@ -75,7 +77,7 @@ void zeropadAndTx(const scoped_aligned_ptr<DTYPE> &src, scoped_aligned_ptr<DTYPE
 		}
 	}
 	if(h2d_tx) {
-		cout << "Sending data to device buffer" << endl;
+		std::cout << "Sending data to device buffer" << std::endl;
 		status = clEnqueueWriteBuffer(queue, device_buff, CL_FALSE, 0,
 			n_ch * dst_h * dst_w * sizeof(DTYPE), dst, 0, NULL, NULL);
 		checkError(status, "Failed to transfer data to the device\n");

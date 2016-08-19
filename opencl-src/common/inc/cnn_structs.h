@@ -1,4 +1,3 @@
-
 #ifndef CNN_STRUCTS_H
 #define CNN_STRUCTS_H
 #include <stdio.h>
@@ -106,7 +105,7 @@ typedef struct {
 typedef struct {
 	DataShape *bot_shape_0;
 	DataShape *bot_shape_1;
-	DataShape top_shape_0;
+	DataShape top_shape;
 } ConcatLayer;
 #endif // CNN_STRUCTS_H
 

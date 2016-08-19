@@ -8,6 +8,8 @@
 #include "AOCLUtils/aocl_utils.h"
 #include "cnn_structs.h"
 #include "device_utils.h"
+#include "data_utils.h"
+#include "cnpy.h"
 
 using namespace aocl_utils;
 using namespace std;
@@ -74,6 +76,7 @@ void printHelp(char *app) {
 	cout << "------------------------------------" << endl;
 	cout << "Usage:" << endl;
 	cout << app;
+	cout << " -model <model file>";
 	cout << " -m <mode>";
 	cout << " [-i] <image path>";
 	cout << " [-l] <image list>";
@@ -83,16 +86,29 @@ void printHelp(char *app) {
 
 int main(int argc, char **argv) {
 	cout << "ImageNet object classification using AlexNet" << endl;
+	std::string model_path;
+	Options options(argc, argv);
+	if(options.has("model")) {
+		model_path = options.get<std::string>("model");
+	} else {
+		printHelp(argv[0]);
+		exit(1);
+	}
 
-	printHelp(argv[0]);
+	initModel(model_path);
 	return 0;
 }
 
 // Read numpy arrays from npz file and assign the model param pointers
 void initModel(std::string model_path) {
-
+	cnpy::npz_t full_model = cnpy::npz_load(model_path);
+	cnpy::NpyArray arr_0 = full_model["arr_0"];
+	std::cout << arr_0.shape[0] << std::endl;
+	std::cout << arr_0.shape[1] << std::endl;
+	std::cout << arr_0.shape[2] << std::endl;
+	std::cout << arr_0.shape[3] << std::endl;
 }
-
+#if 1
 unsigned int runApplication() {
 	cl_int status;
 	size_t global_work_size[3];
@@ -103,7 +119,7 @@ unsigned int runApplication() {
 
 	// zero pad the input image and transfer to device memory allocated for conv1 input.
 	zeropadAndTx(h_input_img, conv1.h_input, conv1.bot_shape->z,
-		conv1.bot_shape->y, conv1.bot_shape->x, conv1.pad, conv1.pad, conv1.d_input, true);
+		conv1.bot_shape->y, conv1.bot_shape->x, conv1.pad, conv1.pad, conv1.d_input, queue, true);
 	// conv 1 -> relu1 -> pool1 -> norm1 layer execution
 	setKernelArgs(conv1, kernel[0], conv1.d_input, global_work_size);
 	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[0]);
@@ -123,14 +139,14 @@ unsigned int runApplication() {
 		norm1.top_shape.x * norm1.top_shape.y * norm1.top_shape.z * sizeof(DTYPE), norm1.h_output, 1, &kernel_event[3], NULL);
 	checkError(status, "Failed to read data from the device");
 	zeropadAndTx(norm1.h_output, h_concat_buff, norm1.bot_shape->z,
-		norm1.bot_shape->y, norm1.bot_shape->x, conv2_1.pad, conv2_1.pad, conv2_1.d_input, false);
+		norm1.bot_shape->y, norm1.bot_shape->x, conv2_1.pad, conv2_1.pad, conv2_1.d_input, queue, false);
 	status = clEnqueueWriteBuffer(queue, conv2_1.d_input, CL_FALSE, 0,
 		conv2_1.bot_shape->z * (conv2_1.bot_shape->x+2*conv2_1.pad) * (conv2_1.bot_shape->y+2*conv2_1.pad) * sizeof(DTYPE),
 		h_concat_buff, 0, NULL, NULL);
 	status = clEnqueueWriteBuffer(queue, conv2_2.d_input, CL_FALSE, 0,
 		conv2_2.bot_shape->z * (conv2_2.bot_shape->x+2*conv2_2.pad) * (conv2_2.bot_shape->y+2*conv2_2.pad) * sizeof(DTYPE),
 		// split the maps into 2 half using pointer offset
-		h_concat_buff() + conv2_1.bot_shape->z * (conv2_1.bot_shape->x+2*conv2_1.pad) * (conv2_1.bot_shape->y+2*conv2_1.pad),
+		(DTYPE *)h_concat_buff + conv2_1.bot_shape->z * (conv2_1.bot_shape->x+2*conv2_1.pad) * (conv2_1.bot_shape->y+2*conv2_1.pad),
 		0, NULL, NULL);
 	checkError(status, "Failed to transfer data to the device\n");
 	clFinish(queue);
@@ -146,7 +162,7 @@ unsigned int runApplication() {
 		conv2_1.top_shape.x * conv2_1.top_shape.y * conv2_1.top_shape.z * sizeof(DTYPE), h_concat_buff, 1, &kernel_event[4], NULL);
 	status = clEnqueueReadBuffer(queue, conv2_2.d_output, CL_TRUE, 0,
 		conv2_2.top_shape.x * conv2_2.top_shape.y * conv2_2.top_shape.z * sizeof(DTYPE),
-		h_concat_buff() + conv2_1.top_shape.x * conv2_1.top_shape.y * conv2_1.top_shape.z, 1, &kernel_event[5], NULL);
+		(DTYPE *)h_concat_buff + conv2_1.top_shape.x * conv2_1.top_shape.y * conv2_1.top_shape.z, 1, &kernel_event[5], NULL);
 	status = clEnqueueWriteBuffer(queue, d_concat_buff, CL_FALSE, 0,
 		relu2.bot_shape->x * relu2.bot_shape->y * relu2.bot_shape->z * sizeof(DTYPE),
 		h_concat_buff, 0, NULL, NULL);
@@ -166,7 +182,7 @@ unsigned int runApplication() {
 	status = clEnqueueReadBuffer(queue, norm2.d_output, CL_TRUE, 0,
 		norm2.top_shape.x * norm2.top_shape.y * norm2.top_shape.z * sizeof(DTYPE), h_concat_buff, 1, &kernel_event[8], NULL);
 	zeropadAndTx(h_concat_buff, conv3.h_input, conv3.bot_shape->z,
-		conv3.bot_shape->y, conv3.bot_shape->x, conv3.pad, conv3.pad, conv3.d_input, true);
+		conv3.bot_shape->y, conv3.bot_shape->x, conv3.pad, conv3.pad, conv3.d_input, queue, true);
 	// conv3 -> relu3
 	setKernelArgs(conv3, kernel[0], conv3.d_input, global_work_size);
 	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[9]);
@@ -175,18 +191,18 @@ unsigned int runApplication() {
 	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 1, &kernel_event[9], &kernel_event[10]);
 	checkError(status, "Failed to launch relu3 kernel");
 	// read the relu3 output and zero pad appropriately and then split maps to feed into 2 conv layers(group = 2)
-	status = clEnqueueReadBuffer(queue, relu3.d_output, CL_TRUE, 0,
+	status = clEnqueueReadBuffer(queue, *relu3.d_output, CL_TRUE, 0,
 		relu3.top_shape.x * relu3.top_shape.y * relu3.top_shape.z * sizeof(DTYPE), *relu3.h_output, 1, &kernel_event[10], NULL);
 	checkError(status, "Failed to read data from the device");
 	zeropadAndTx(*relu3.h_output, h_concat_buff, relu3.bot_shape->z,
-		relu3.bot_shape->y, relu3.bot_shape->x, conv4_1.pad, conv4_1.pad, conv4_1.d_input, false);
+		relu3.bot_shape->y, relu3.bot_shape->x, conv4_1.pad, conv4_1.pad, conv4_1.d_input, queue, false);
 	status = clEnqueueWriteBuffer(queue, conv4_1.d_input, CL_FALSE, 0,
 		conv4_1.bot_shape->z * (conv4_1.bot_shape->x+2*conv4_1.pad) * (conv4_1.bot_shape->y+2*conv4_1.pad) * sizeof(DTYPE),
 		h_concat_buff, 0, NULL, NULL);
 	status = clEnqueueWriteBuffer(queue, conv4_2.d_input, CL_FALSE, 0,
 		conv4_2.bot_shape->z * (conv4_2.bot_shape->x+2*conv4_2.pad) * (conv4_2.bot_shape->y+2*conv4_2.pad) * sizeof(DTYPE),
 		// split the maps into 2 half using pointer offset
-		h_concat_buff() + conv4_1.bot_shape->z * (conv4_1.bot_shape->x+2*conv4_1.pad) * (conv4_1.bot_shape->y+2*conv4_1.pad),
+		(DTYPE *)h_concat_buff + conv4_1.bot_shape->z * (conv4_1.bot_shape->x+2*conv4_1.pad) * (conv4_1.bot_shape->y+2*conv4_1.pad),
 		0, NULL, NULL);
 	checkError(status, "Failed to transfer data to the device\n");
 	clFinish(queue);
@@ -202,7 +218,7 @@ unsigned int runApplication() {
 		conv4_1.top_shape.x * conv4_1.top_shape.y * conv4_1.top_shape.z * sizeof(DTYPE), h_concat_buff, 1, &kernel_event[11], NULL);
 	status = clEnqueueReadBuffer(queue, conv4_2.d_output, CL_TRUE, 0,
 		conv4_2.top_shape.x * conv4_2.top_shape.y * conv4_2.top_shape.z * sizeof(DTYPE),
-		h_concat_buff() + conv4_1.top_shape.x * conv4_1.top_shape.y * conv4_1.top_shape.z, 1, &kernel_event[12], NULL);
+		(DTYPE *)h_concat_buff + conv4_1.top_shape.x * conv4_1.top_shape.y * conv4_1.top_shape.z, 1, &kernel_event[12], NULL);
 	status = clEnqueueWriteBuffer(queue, d_concat_buff, CL_FALSE, 0,
 		relu4.bot_shape->x * relu4.bot_shape->y * relu4.bot_shape->z * sizeof(DTYPE),
 		h_concat_buff, 0, NULL, NULL);
@@ -215,14 +231,14 @@ unsigned int runApplication() {
 		relu4.top_shape.x * relu4.top_shape.y * relu4.top_shape.z * sizeof(DTYPE), h_concat_buff2, 1, &kernel_event[13], NULL);
 	checkError(status, "Failed to read data from the device");
 	zeropadAndTx(h_concat_buff2, h_concat_buff, relu4.bot_shape->z,
-		relu4.bot_shape->y, relu4.bot_shape->x, conv5_1.pad, conv5_1.pad, conv5_1.d_input, false);
+		relu4.bot_shape->y, relu4.bot_shape->x, conv5_1.pad, conv5_1.pad, conv5_1.d_input, queue, false);
 	status = clEnqueueWriteBuffer(queue, conv5_1.d_input, CL_FALSE, 0,
 		conv5_1.bot_shape->z * (conv5_1.bot_shape->x+2*conv5_1.pad) * (conv5_1.bot_shape->y+2*conv5_1.pad) * sizeof(DTYPE),
 		h_concat_buff, 0, NULL, NULL);
 	status = clEnqueueWriteBuffer(queue, conv5_2.d_input, CL_FALSE, 0,
 		conv5_2.bot_shape->z * (conv5_2.bot_shape->x+2*conv5_2.pad) * (conv5_2.bot_shape->y+2*conv5_2.pad) * sizeof(DTYPE),
 		// split the maps into 2 half using pointer offset
-		h_concat_buff() + conv5_1.bot_shape->z * (conv5_1.bot_shape->x+2*conv5_1.pad) * (conv5_1.bot_shape->y+2*conv5_1.pad),
+		(DTYPE *)h_concat_buff + conv5_1.bot_shape->z * (conv5_1.bot_shape->x+2*conv5_1.pad) * (conv5_1.bot_shape->y+2*conv5_1.pad),
 		0, NULL, NULL);
 	checkError(status, "Failed to transfer data to the device\n");
 	clFinish(queue);
@@ -238,7 +254,7 @@ unsigned int runApplication() {
 		conv5_1.top_shape.x * conv5_1.top_shape.y * conv5_1.top_shape.z * sizeof(DTYPE), h_concat_buff, 1, &kernel_event[14], NULL);
 	status = clEnqueueReadBuffer(queue, conv5_2.d_output, CL_TRUE, 0,
 		conv5_2.top_shape.x * conv5_2.top_shape.y * conv5_2.top_shape.z * sizeof(DTYPE),
-		h_concat_buff() + conv5_1.top_shape.x * conv5_1.top_shape.y * conv5_1.top_shape.z, 1, &kernel_event[15], NULL);
+		(DTYPE *)h_concat_buff + conv5_1.top_shape.x * conv5_1.top_shape.y * conv5_1.top_shape.z, 1, &kernel_event[15], NULL);
 	status = clEnqueueWriteBuffer(queue, d_concat_buff, CL_FALSE, 0,
 		relu5.bot_shape->x * relu5.bot_shape->y * relu5.bot_shape->z * sizeof(DTYPE),
 		h_concat_buff, 0, NULL, NULL);
@@ -251,23 +267,23 @@ unsigned int runApplication() {
 	status = clEnqueueNDRangeKernel(queue, kernel[1], 3, NULL, global_work_size, NULL, 1, &kernel_event[16], &kernel_event[17]);
 	checkError(status, "Failed to launch pool5 kernel");
 	// fc6
-	setFcKernelArgs(fc6, kernel[2], global_work_size);
+	setKernelArgs(fc6, kernel[2], global_work_size);
 	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 1, &kernel_event[17], &kernel_event[18]);
 	checkError(status, "Failed to launch fc6 kernel");
 	setKernelArgs(relu6, kernel[3], global_work_size);
 	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 1, &kernel_event[18], &kernel_event[19]);
 	checkError(status, "Failed to launch relu6 kernel");
-	setFcKernelArgs(fc7, kernel[2], global_work_size);
+	setKernelArgs(fc7, kernel[2], global_work_size);
 	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 1, &kernel_event[19], &kernel_event[20]);
 	checkError(status, "Failed to launch fc7 kernel");
 	setKernelArgs(relu7, kernel[3], global_work_size);
 	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 1, &kernel_event[20], &kernel_event[21]);
 	checkError(status, "Failed to launch relu5 kernel");
-	setFcKernelArgs(fc8, kernel[2], global_work_size);
+	setKernelArgs(fc8, kernel[2], global_work_size);
 	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 1, &kernel_event[21], &kernel_event[22]);
 	checkError(status, "Failed to launch fc8 kernel");
 
-	setActKernelArgs(smax, kernel[4], global_work_size);
+	setKernelArgs(smax, kernel[4], global_work_size);
 	local_work_size[0] = global_work_size[0];
 	local_work_size[1] = global_work_size[1];
 	local_work_size[2] = global_work_size[2];
@@ -281,11 +297,13 @@ unsigned int runApplication() {
 	status = clEnqueueReadBuffer(queue, *smax.d_output, CL_TRUE, 0,
 		smax.top_shape.x * smax.top_shape.y * smax.top_shape.z * sizeof(DTYPE), *smax.h_output, 0, NULL, NULL);
 	checkError(status, "Failed to read data from the device");
-}
 
+	return 0;
+}
+#endif
 void initNetParams(DataShape &input_shape) {
 	cout << "CNN model initialization\n";
-	conv1.bot_shape = &inputShape; conv1.K = 11; conv1.pad = 0;
+	conv1.bot_shape = &input_shape; conv1.K = 11; conv1.pad = 0;
 	conv1.W = NULL;	conv1.b = NULL;	conv1.stride = 4; conv1.top_shape.z = 96;
 	conv1.top_shape.x = (conv1.bot_shape->x - conv1.K + 1 + 2*conv1.pad)/conv1.stride + 1;
 	conv1.top_shape.y = (conv1.bot_shape->y - conv1.K + 1 + 2*conv1.pad)/conv1.stride + 1;
@@ -397,39 +415,38 @@ void initNetParams(DataShape &input_shape) {
 	smax.bot_shape = &fc8.top_shape; smax.type = SOFTMAX; smax.top_shape.x = smax.bot_shape->x;
 	smax.top_shape.y = smax.bot_shape->y; smax.top_shape.z = smax.bot_shape->z;
 }
-
 void allocateHostBuffer() {
 	cout << "Allocating host memory for inputs and outputs\n";
 	h_input_img.reset(conv1.bot_shape->x * conv1.bot_shape->y * conv1.bot_shape->z);
 	// FIXME: this buffer must be as large as the max buffer size required for concatenation. Check if the norm1 output
 	// requires largest buffer
-	h_concat_buff.reset((norm1.top_shape.x + 2*conv2_1.pad) * (norm1.top_shape.y + 2*conv2_1.pad) * norm1.top_shape.z)
-	h_concat_buff2.reset((norm1.top_shape.x + 2*conv2_1.pad) * (norm1.top_shape.y + 2*conv2_1.pad) * norm1.top_shape.z)
-	allocateConvHosticeBuff(conv1);
+	h_concat_buff.reset((norm1.top_shape.x + 2*conv2_1.pad) * (norm1.top_shape.y + 2*conv2_1.pad) * norm1.top_shape.z);
+	h_concat_buff2.reset((norm1.top_shape.x + 2*conv2_1.pad) * (norm1.top_shape.y + 2*conv2_1.pad) * norm1.top_shape.z);
+	allocConvHostBuff(conv1);
 	// ActLayer performs in-place ops. No need of output buffer.
 	relu1.h_input = &conv1.h_output;
 	relu1.h_output = relu1.h_input;
 	allocPoolHostBuff(pool1);
-	allocBatchNormHostBuff(norm1, pool1.h_output);
+	allocNormHostBuff(norm1, pool1.h_output);
 
-	allocateConvHostBuff(conv2_1);
-	allocateConvHostBuff(conv2_2);
+	allocConvHostBuff(conv2_1);
+	allocConvHostBuff(conv2_2);
 	relu2.h_input = &h_concat_buff;
 	relu2.h_output = relu2.h_input;
 	allocPoolHostBuff(pool2);
-	allocBatchNormHostBuff(norm2, pool2.h_output);
+	allocNormHostBuff(norm2, pool2.h_output);
 
-	allocateConvHostBuff(conv3);
+	allocConvHostBuff(conv3);
 	relu3.h_input = &conv3.h_output;
 	relu3.h_output = relu3.h_input;
 
-	allocateConvHostBuff(conv4_1);
-	allocateConvHostBuff(conv4_2);
+	allocConvHostBuff(conv4_1);
+	allocConvHostBuff(conv4_2);
 	relu4.h_input = &h_concat_buff;
 	relu4.h_output = relu4.h_input;
 
-	allocateConvHostBuff(conv5_1);
-	allocateConvHostBuff(conv5_2);
+	allocConvHostBuff(conv5_1);
+	allocConvHostBuff(conv5_2);
 	relu5.h_input = &h_concat_buff;
 	relu5.h_output = relu5.h_input;
 	allocPoolHostBuff(pool5);
@@ -440,7 +457,7 @@ void allocateHostBuffer() {
 	allocFcHostBuff(fc7, *relu6.h_output);
 	relu7.h_input = &fc7.h_output;
 	relu7.h_output = relu7.h_input;
-	allocFcDevBuff(fc8, *relu7.h_output);
+	allocFcHostBuff(fc8, *relu7.h_output);
 
 	smax.h_input = &fc8.h_output;
 	smax.h_output = smax.h_input;
@@ -456,42 +473,42 @@ void allocateDeviceBuffer() {
 	d_concat_buff = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_1_ALTERA,
 		(norm1.top_shape.x + 2*conv2_1.pad) * (norm1.top_shape.y + 2*conv2_1.pad) * norm1.top_shape.z * sizeof(DTYPE), NULL, &status);
 
-	allocateConvDeviceBuff(conv1);
+	allocConvDevBuff(context, conv1);
 	// ActLayer performs in-place ops. No need of output buffer.
 	relu1.d_input = &conv1.d_output;
 	relu1.d_output = relu1.d_input;
-	allocPoolDevBuff(pool1, *relu1.d_output);
-	allocBatchNormDevBuff(norm1, pool1.d_output, norm1.top_shape.z);
+	allocPoolDevBuff(context, pool1, *relu1.d_output);
+	allocBatchNormDevBuff(context, norm1, pool1.d_output, norm1.top_shape.z);
 
-	allocateConvDevBuff(conv2_1);
-	allocateConvDevBuff(conv2_2);
+	allocConvDevBuff(context, conv2_1);
+	allocConvDevBuff(context, conv2_2);
 	relu2.d_input = &d_concat_buff;
 	relu2.d_output = relu2.d_input;
-	allocPoolDevBuff(pool2, *relu2.d_output);
-	allocBatchNormDevBuff(norm2, pool2.d_output, norm1.top_shape.z);
+	allocPoolDevBuff(context, pool2, *relu2.d_output);
+	allocBatchNormDevBuff(context, norm2, pool2.d_output, norm1.top_shape.z);
 
-	allocateConvDevBuff(conv3);
+	allocConvDevBuff(context, conv3);
 	relu3.d_input = &conv3.d_output;
 	relu3.d_output = relu3.d_input;
 
-	allocateConvDevBuff(conv4_1);
-	allocateConvDevBuff(conv4_2);
+	allocConvDevBuff(context, conv4_1);
+	allocConvDevBuff(context, conv4_2);
 	relu4.d_input = &d_concat_buff;
 	relu4.d_output = relu4.d_input;
 
-	allocateConvDevBuff(conv5_1);
-	allocateConvDevBuff(conv5_2);
+	allocConvDevBuff(context, conv5_1);
+	allocConvDevBuff(context, conv5_2);
 	relu5.d_input = &d_concat_buff;
 	relu5.d_output = relu5.d_input;
-	allocPoolDevBuff(pool5, *relu5.d_output);
+	allocPoolDevBuff(context, pool5, *relu5.d_output);
 
-	allocFcDevBuff(fc6, pool5.d_output);
+	allocFcDevBuff(context, fc6, pool5.d_output);
 	relu6.d_input = &fc6.d_output;
 	relu6.d_output = relu6.d_input;
-	allocFcDevBuff(fc7, *relu6.d_output);
+	allocFcDevBuff(context, fc7, *relu6.d_output);
 	relu7.d_input = &fc7.d_output;
 	relu7.d_output = relu7.d_input;
-	allocFcDevBuff(fc8, *relu7.d_output);
+	allocFcDevBuff(context, fc8, *relu7.d_output);
 
 	smax.d_input = &fc8.d_output;
 	smax.d_output = smax.d_input;
@@ -557,7 +574,6 @@ bool init_opencl() {
 	cout << "OpenCL init done" << endl;
 	return true;
 }
-
 void cleanup() {
 	cout << "Releasing all OpenCL objects" << endl;
 	clReleaseMemObject(d_concat_buff);

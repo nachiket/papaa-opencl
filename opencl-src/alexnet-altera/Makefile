@@ -60,12 +60,12 @@ TARGET_DIR := bin
 
 # Directories
 INC_DIRS := host/inc ../common/inc
-LIB_DIRS := 
+LIB_DIRS := /home/user/workspace/libs
 
 # Files
 INCS := $(wildcard host/inc/*.h)
 SRCS := $(wildcard host/src/*.cpp ../common/src/AOCLUtils/*.cpp)
-LIBS := rt
+LIBS := rt opencv_core opencv_highgui cnpy
 
 # Make it all!
 all : $(TARGET_DIR)/$(TARGET)

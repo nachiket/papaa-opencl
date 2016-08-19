@@ -1,5 +1,6 @@
 #include "device_utils.h"
 
+
 void setKernelArgs(const ConvLayer &conv, const cl_kernel &kernel, const cl_mem &in_buff, size_t *global_ws) {
 	cl_int status;
 	unsigned argi = 0;
@@ -23,7 +24,6 @@ void setKernelArgs(const ConvLayer &conv, const cl_kernel &kernel, const cl_mem 
     global_ws[1] = conv.top_shape.y;
     global_ws[2] = conv.top_shape.z;
 }
-
 void setKernelArgs(const PoolLayer &pool, const cl_kernel &kernel, size_t *global_ws) {
 	cl_int status;
 	unsigned argi = 0;
@@ -96,7 +96,7 @@ void setKernelArgs(const BatchNormLayer &bn, const cl_kernel &kernel, size_t *gl
     global_ws[2] = bn.top_shape.z;
 }
 
-void allocConvDevBuff(ConvLayer &conv) {
+void allocConvDevBuff(cl_context &context, ConvLayer &conv) {
 	cl_int status;
 	// data is allocated in BANK1 and weights are in BANK2 for efficient access.
 	conv.d_input = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_1_ALTERA,
@@ -110,7 +110,7 @@ void allocConvDevBuff(ConvLayer &conv) {
 		conv.top_shape.z * sizeof(WTYPE), conv.b, &status);
 }
 
-void allocFcDevBuff(FcLayer &fc, cl_mem &prev_output) {
+void allocFcDevBuff(cl_context &context, FcLayer &fc, cl_mem &prev_output) {
 	cl_int status;
 	fc.d_input = &prev_output;
 	fc.d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_1_ALTERA, 
@@ -121,14 +121,14 @@ void allocFcDevBuff(FcLayer &fc, cl_mem &prev_output) {
 		fc.top_shape.x * sizeof(WTYPE), fc.b, &status);
 }
 
-void allocPoolDevBuff(PoolLayer &pool, cl_mem &prev_output) {
+void allocPoolDevBuff(cl_context &context, PoolLayer &pool, cl_mem &prev_output) {
 	cl_int status;
 	pool.d_input = &prev_output;
 	pool.d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_1_ALTERA, 
 		pool.top_shape.x * pool.top_shape.y  * pool.top_shape.z * sizeof(DTYPE), NULL, &status);
 }
 
-void allocBatchNormDevBuff(BatchNormLayer &bn, cl_mem &prev_output, unsigned int no_out) {
+void allocBatchNormDevBuff(cl_context &context, BatchNormLayer &bn, cl_mem &prev_output, unsigned int no_out) {
 	cl_int status;
 	bn.d_input = &prev_output;
 	bn.d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_1_ALTERA, 
@@ -158,7 +158,6 @@ void allocNormHostBuff(BatchNormLayer &norm, scoped_aligned_ptr<DTYPE> &prev_h_o
 	norm.h_input = &prev_h_output;
 	norm.h_output.reset(norm.top_shape.x * norm.top_shape.y * norm.top_shape.z);
 }
-
 void freeConvDevBuff(const ConvLayer &conv) {
 
 	clReleaseMemObject(conv.d_input);
