@@ -1,5 +1,5 @@
 #include "device_utils.h"
-
+#include <iostream>
 
 void setKernelArgs(const ConvLayer &conv, const cl_kernel &kernel, const cl_mem &in_buff, size_t *global_ws) {
 	cl_int status;

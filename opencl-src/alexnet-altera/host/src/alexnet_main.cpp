@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <sstream>
 #include <math.h>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -10,6 +11,9 @@
 #include "device_utils.h"
 #include "data_utils.h"
 #include "cnpy.h"
+
+#define SSTR( x ) static_cast< std::ostringstream & >( \
+	( std::ostringstream() << std::dec << x ) ).str()
 
 using namespace aocl_utils;
 using namespace std;
@@ -60,6 +64,8 @@ ActLayer relu7;
 FcLayer fc8;
 ActLayer smax;
 
+// Full model container
+cnpy::npz_t full_model;
 // Buffer to read output of grouped conv layers and concatenate. The size of these
 // will be max requirement across whole network.
 cl_mem d_concat_buff;
@@ -94,26 +100,104 @@ int main(int argc, char **argv) {
 		printHelp(argv[0]);
 		exit(1);
 	}
-
+	DataShape input_shape = {227, 227, 3};
+	initNetParams(input_shape);
 	initModel(model_path);
+	init_opencl();
+	allocateHostBuffer();
+	allocateDeviceBuffer();
+	//TODO: Init image
+	runApplication();
+	cleanup();
 	return 0;
 }
 
+void clubNormParams(BatchNormLayer &norm, cnpy::NpyArray &beta,
+	cnpy::NpyArray &gamma, cnpy::NpyArray &mean, cnpy::NpyArray &inv_std) {
+	
+	assert(norm.top_shape.z == beta.shape[0]);
+	assert(norm.top_shape.z == gamma.shape[0]);
+	assert(norm.top_shape.z == mean.shape[0]);
+	assert(norm.top_shape.z == inv_std.shape[0]);
+	WTYPE * p_beta = (WTYPE *)beta.data;
+	WTYPE * p_gamma = (WTYPE *)gamma.data;
+	WTYPE * p_mean = (WTYPE *)mean.data;
+	WTYPE * p_inv_std = (WTYPE *)inv_std.data;
+	for(int map = 0; map < norm.top_shape.z; map++) {
+		norm.scale[map] = p_gamma[map] * p_inv_std[map];
+		norm.offset[map] = -p_mean[map] * p_inv_std[map] * p_gamma[map] + p_beta[map];
+	}
+}
 // Read numpy arrays from npz file and assign the model param pointers
 void initModel(std::string model_path) {
-	cnpy::npz_t full_model = cnpy::npz_load(model_path);
-	cnpy::NpyArray arr_0 = full_model["arr_0"];
-	std::cout << arr_0.shape[0] << std::endl;
-	std::cout << arr_0.shape[1] << std::endl;
-	std::cout << arr_0.shape[2] << std::endl;
-	std::cout << arr_0.shape[3] << std::endl;
+
+	std::string param_prefix = "arr_";
+	std::string param_name;
+	// Read npz model file into global container.
+	full_model = cnpy::npz_load(model_path);
+	// Allocate buffers for normalization layer parameters.
+	// Since we are considering clubbed paramters, they are directly not
+	// present in the full_model. Hence they need to be created
+	norm1.scale = new WTYPE [norm1.top_shape.z];
+	norm1.offset = new WTYPE [norm1.top_shape.z];
+	norm2.scale = new WTYPE [norm2.top_shape.z];
+	norm2.offset = new WTYPE [norm2.top_shape.z];
+
+	cnpy::npz_t::iterator pstart = full_model.begin();
+	for(; pstart != full_model.end(); pstart++) {
+		std::cout << pstart->first << endl;
+		cnpy::NpyArray param = pstart->second;
+		for(unsigned int s = 0; s < param.shape.size(); s++) {
+			std::cout << param.shape[s] << ",";
+		}
+		std::cout << std::endl;
+	}
+	int param_idx = 0;
+	conv1.W = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	conv1.b = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	// Extract batch norm layer 1 params and club them
+	cnpy::NpyArray &norm1_beta = full_model[param_prefix + SSTR(param_idx++)];
+	cnpy::NpyArray &norm1_gamma = full_model[param_prefix + SSTR(param_idx++)];
+	cnpy::NpyArray &norm1_mean = full_model[param_prefix + SSTR(param_idx++)];
+	cnpy::NpyArray &norm1_inv_std = full_model[param_prefix + SSTR(param_idx++)];
+	clubNormParams(norm1, norm1_beta, norm1_gamma, norm1_mean, norm1_inv_std);
+
+	conv2_1.W = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	conv2_1.b = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	conv2_2.W = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	conv2_2.b = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	// Extract batch norm layer 2 params and club them
+	cnpy::NpyArray &norm2_beta = full_model[param_prefix + SSTR(param_idx++)];
+	cnpy::NpyArray &norm2_gamma = full_model[param_prefix + SSTR(param_idx++)];
+	cnpy::NpyArray &norm2_mean = full_model[param_prefix + SSTR(param_idx++)];
+	cnpy::NpyArray &norm2_inv_std = full_model[param_prefix + SSTR(param_idx++)];
+	clubNormParams(norm2, norm2_beta, norm2_gamma, norm2_mean, norm2_inv_std);
+
+	conv3.W = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	conv3.b = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+
+	conv4_1.W = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	conv4_1.b = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	conv4_2.W = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	conv4_2.b = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+
+	conv5_1.W = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	conv5_1.b = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	conv5_2.W = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	conv5_2.b = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+
+	fc6.W = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	fc6.b = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	fc7.W = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	fc7.b = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	fc8.W = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
+	fc8.b = (WTYPE *)full_model[param_prefix + SSTR(param_idx++)].data;
 }
-#if 1
 unsigned int runApplication() {
 	cl_int status;
 	size_t global_work_size[3];
 	size_t local_work_size[3];
-	scoped_array<cl_event> kernel_event(12);
+	scoped_array<cl_event> kernel_event(24);
 
 	const double start_time = getCurrentTimestamp();
 
@@ -133,7 +217,7 @@ unsigned int runApplication() {
 	setKernelArgs(norm1, kernel[5], global_work_size);
 	status = clEnqueueNDRangeKernel(queue, kernel[5], 3, NULL, global_work_size, NULL, 1, &kernel_event[2], &kernel_event[3]);
 	checkError(status, "Failed to launch norm1 kernel");
-
+	cout << "norm1 done" << endl;
 	// read the norm1 output and zero pad appropriately and then split maps to feed into 2 conv layers(group = 2)
 	status = clEnqueueReadBuffer(queue, norm1.d_output, CL_TRUE, 0,
 		norm1.top_shape.x * norm1.top_shape.y * norm1.top_shape.z * sizeof(DTYPE), norm1.h_output, 1, &kernel_event[3], NULL);
@@ -287,86 +371,89 @@ unsigned int runApplication() {
 	local_work_size[0] = global_work_size[0];
 	local_work_size[1] = global_work_size[1];
 	local_work_size[2] = global_work_size[2];
-	status = clEnqueueNDRangeKernel(queue, kernel[4], 3, NULL, global_work_size, local_work_size, 1, &kernel_event[22], &kernel_event[23]);
+	status = clEnqueueNDRangeKernel(queue, kernel[4], 3, NULL, global_work_size, local_work_size, 1, &kernel_event[17], &kernel_event[23]);
 	checkError(status, "Failed to launch smax kernel");
+	clFinish(queue);
 
 	const double end_time = getCurrentTimestamp();
 	const double total_time = end_time - start_time;
+	std::cout << "Runtime = " << total_time << std::endl;
 	// Read the final results
 	cout << "Reading the output from the device" << endl;
 	status = clEnqueueReadBuffer(queue, *smax.d_output, CL_TRUE, 0,
 		smax.top_shape.x * smax.top_shape.y * smax.top_shape.z * sizeof(DTYPE), *smax.h_output, 0, NULL, NULL);
 	checkError(status, "Failed to read data from the device");
-
+	cout << "Done---------------" << endl;
 	return 0;
 }
-#endif
 void initNetParams(DataShape &input_shape) {
 	cout << "CNN model initialization\n";
 	conv1.bot_shape = &input_shape; conv1.K = 11; conv1.pad = 0;
 	conv1.W = NULL;	conv1.b = NULL;	conv1.stride = 4; conv1.top_shape.z = 96;
-	conv1.top_shape.x = (conv1.bot_shape->x - conv1.K + 1 + 2*conv1.pad)/conv1.stride + 1;
-	conv1.top_shape.y = (conv1.bot_shape->y - conv1.K + 1 + 2*conv1.pad)/conv1.stride + 1;
+	conv1.top_shape.x = (conv1.bot_shape->x - conv1.K + 1 + 2*conv1.pad + conv1.stride-1)/conv1.stride;
+	conv1.top_shape.y = (conv1.bot_shape->y - conv1.K + 1 + 2*conv1.pad + conv1.stride-1)/conv1.stride;
 
+	std::cout << "conv1:" << conv1.top_shape.z << "," << conv1.top_shape.y << "," << conv1.top_shape.x << endl;
 	relu1.bot_shape = &conv1.top_shape; relu1.type = RELU; relu1.top_shape.x = relu1.bot_shape->x;
 	relu1.top_shape.y = relu1.bot_shape->y; relu1.top_shape.z = relu1.bot_shape->z;
 
 	pool1.bot_shape = &relu1.top_shape; pool1.type = MAX; pool1.stride = 2; pool1.winSize = 3; pool1.pad = 0;
-	pool1.top_shape.x = ceil((pool1.bot_shape->x - pool1.winSize)/(float)pool1.stride) + 1;
-	pool1.top_shape.y = ceil((pool1.bot_shape->y - pool1.winSize)/(float)pool1.stride) + 1;
+	// See Lasagne Pool layer output calculation
+	pool1.top_shape.x = (pool1.bot_shape->x + 2*pool1.pad - pool1.winSize + 1 + pool1.stride - 1)/pool1.stride;
+	pool1.top_shape.y = (pool1.bot_shape->y + 2*pool1.pad - pool1.winSize + 1 + pool1.stride - 1)/pool1.stride;
 	pool1.top_shape.z = pool1.bot_shape->z;
-
+	std::cout << "pool1:" << pool1.top_shape.z << "," << pool1.top_shape.y << "," << pool1.top_shape.x << endl;
 	norm1.bot_shape = &pool1.top_shape;	norm1.scale = NULL;	norm1.offset = NULL;
 	norm1.top_shape.x = norm1.bot_shape->x; norm1.top_shape.y = norm1.bot_shape->y; norm1.top_shape.z = norm1.bot_shape->z;
 
 	slice1.bot_shape = &norm1.top_shape;
 	slice1.top_shape_0.x = slice1.bot_shape->x; slice1.top_shape_0.y = slice1.bot_shape->y; slice1.top_shape_0.z = slice1.bot_shape->z/2;
 	slice1.top_shape_1.x = slice1.bot_shape->x; slice1.top_shape_1.y = slice1.bot_shape->y; slice1.top_shape_1.z = slice1.bot_shape->z/2;
-
 	conv2_1.bot_shape = &slice1.top_shape_0; conv2_1.K = 5; conv2_1.pad = 2;
 	conv2_1.W = NULL;	conv2_1.b = NULL;	conv2_1.stride = 1; conv2_1.top_shape.z = 128;
-	conv2_1.top_shape.x = (conv2_1.bot_shape->x - conv2_1.K + 1 + 2*conv2_1.pad)/conv2_1.stride + 1;
-	conv2_1.top_shape.y = (conv2_1.bot_shape->y - conv2_1.K + 1 + 2*conv2_1.pad)/conv2_1.stride + 1;
+	conv2_1.top_shape.x = (conv2_1.bot_shape->x - conv2_1.K + 1 + 2*conv2_1.pad + conv2_1.stride-1)/conv2_1.stride;
+	conv2_1.top_shape.y = (conv2_1.bot_shape->y - conv2_1.K + 1 + 2*conv2_1.pad + conv2_1.stride-1)/conv2_1.stride;
 
 	conv2_2.bot_shape = &slice1.top_shape_1; conv2_2.K = 5; conv2_2.pad = 2;
 	conv2_2.W = NULL;	conv2_2.b = NULL; conv2_2.stride = 1; conv2_2.top_shape.z = 128;
-	conv2_2.top_shape.x = (conv2_2.bot_shape->x - conv2_2.K + 1 + 2*conv2_2.pad)/conv2_2.stride + 1;
-	conv2_2.top_shape.y = (conv2_2.bot_shape->y - conv2_2.K + 1 + 2*conv2_2.pad)/conv2_2.stride + 1;
+	conv2_2.top_shape.x = (conv2_2.bot_shape->x - conv2_2.K + 1 + 2*conv2_2.pad + conv2_2.stride-1)/conv2_2.stride;
+	conv2_2.top_shape.y = (conv2_2.bot_shape->y - conv2_2.K + 1 + 2*conv2_2.pad + conv2_2.stride-1)/conv2_2.stride;
 
 	concat1.bot_shape_0 = &conv2_1.top_shape; concat1.bot_shape_1 = &conv2_2.top_shape;
 	concat1.top_shape.x = concat1.bot_shape_0->x; concat1.top_shape.y = concat1.bot_shape_0->y; concat1.top_shape.z = concat1.bot_shape_0->z + concat1.bot_shape_1->z;
 
+	std::cout << "conv2:" << concat1.top_shape.z << "," << concat1.top_shape.y << "," << concat1.top_shape.x << endl;
 	relu2.bot_shape = &concat1.top_shape; relu2.type = RELU; relu2.top_shape.x = relu2.bot_shape->x;
 	relu2.top_shape.y = relu2.bot_shape->y; relu2.top_shape.z = relu2.bot_shape->z;
 
 	pool2.bot_shape = &relu2.top_shape; pool2.type = MAX; pool2.stride = 2; pool2.winSize = 3; pool2.pad = 0;
-	pool2.top_shape.x = ceil((pool2.bot_shape->x - pool2.winSize)/(float)pool2.stride) + 1;
-	pool2.top_shape.y = ceil((pool2.bot_shape->y - pool2.winSize)/(float)pool2.stride) + 1;
+	pool2.top_shape.x = (pool2.bot_shape->x + 2*pool2.pad - pool2.winSize + 1 + pool2.stride - 1)/pool2.stride;
+	pool2.top_shape.y = (pool2.bot_shape->y + 2*pool2.pad - pool2.winSize + 1 + pool2.stride - 1)/pool2.stride;
 	pool2.top_shape.z = pool2.bot_shape->z;
 
 	norm2.bot_shape = &pool2.top_shape;	norm2.scale = NULL;	norm2.offset = NULL;
 	norm2.top_shape.x = norm2.bot_shape->x; norm2.top_shape.y = norm2.bot_shape->y; norm2.top_shape.z = norm2.bot_shape->z;
 
 	conv3.bot_shape = &norm2.top_shape; conv3.K = 3; conv3.pad = 1;
-	conv3.W = NULL;	conv1.b = NULL;	conv1.stride = 1; conv1.top_shape.z = 384;
-	conv3.top_shape.x = (conv3.bot_shape->x - conv3.K + 1 + 2*conv3.pad)/conv3.stride + 1;
-	conv3.top_shape.y = (conv3.bot_shape->y - conv3.K + 1 + 2*conv3.pad)/conv3.stride + 1;
+	conv3.W = NULL;	conv3.b = NULL;	conv3.stride = 1; conv3.top_shape.z = 384;
+	conv3.top_shape.x = (conv3.bot_shape->x - conv3.K + 1 + 2*conv3.pad + conv3.stride-1)/conv3.stride;
+	conv3.top_shape.y = (conv3.bot_shape->y - conv3.K + 1 + 2*conv3.pad + conv3.stride-1)/conv3.stride;
 	relu3.bot_shape = &conv3.top_shape; relu3.type = RELU; relu3.top_shape.x = relu3.bot_shape->x;
 	relu3.top_shape.y = relu3.bot_shape->y; relu3.top_shape.z = relu3.bot_shape->z;
-
+	std::cout << "conv3:" << conv3.top_shape.z << "," << conv3.top_shape.y << "," << conv3.top_shape.x << std::endl;
 	slice2.bot_shape = &relu3.top_shape;
 	slice2.top_shape_0.x = slice2.bot_shape->x; slice2.top_shape_0.y = slice2.bot_shape->y; slice2.top_shape_0.z = slice2.bot_shape->z/2;
 	slice2.top_shape_1.x = slice2.bot_shape->x; slice2.top_shape_1.y = slice2.bot_shape->y; slice2.top_shape_1.z = slice2.bot_shape->z/2;
 
 	conv4_1.bot_shape = &slice2.top_shape_0; conv4_1.K = 3;	conv4_1.pad = 1;
 	conv4_1.W = NULL;	conv4_1.b = NULL;	conv4_1.stride = 1; conv4_1.top_shape.z = 192;
-	conv4_1.top_shape.x = (conv4_1.bot_shape->x - conv4_1.K + 1 + 2*conv4_1.pad)/conv4_1.stride + 1;
-	conv4_1.top_shape.y = (conv4_1.bot_shape->y - conv4_1.K + 1 + 2*conv4_1.pad)/conv4_1.stride + 1;
+	conv4_1.top_shape.x = (conv4_1.bot_shape->x - conv4_1.K + 1 + 2*conv4_1.pad + conv4_1.stride-1)/conv4_1.stride;
+	conv4_1.top_shape.y = (conv4_1.bot_shape->y - conv4_1.K + 1 + 2*conv4_1.pad + conv4_1.stride-1)/conv4_1.stride;
 
 	conv4_2.bot_shape = &slice2.top_shape_1; conv4_2.K = 3; conv4_2.pad = 1;
 	conv4_2.W = NULL;	conv4_2.b = NULL; conv4_2.stride = 1; conv4_2.top_shape.z = 192;
-	conv4_2.top_shape.x = (conv4_2.bot_shape->x - conv4_2.K + 1 + 2*conv4_2.pad)/conv4_2.stride + 1;
-	conv4_2.top_shape.y = (conv4_2.bot_shape->y - conv4_2.K + 1 + 2*conv4_2.pad)/conv4_2.stride + 1;
+	conv4_2.top_shape.x = (conv4_2.bot_shape->x - conv4_2.K + 1 + 2*conv4_2.pad + conv4_2.stride-1)/conv4_2.stride;
+	conv4_2.top_shape.y = (conv4_2.bot_shape->y - conv4_2.K + 1 + 2*conv4_2.pad + conv4_2.stride-1)/conv4_2.stride;
 
 	concat2.bot_shape_0 = &conv4_1.top_shape; concat2.bot_shape_1 = &conv4_2.top_shape;
 	concat2.top_shape.x = concat2.bot_shape_0->x; concat2.top_shape.y = concat2.bot_shape_0->y; concat2.top_shape.z = concat2.bot_shape_0->z + concat2.bot_shape_1->z;
@@ -380,48 +467,57 @@ void initNetParams(DataShape &input_shape) {
 
 	conv5_1.bot_shape = &slice3.top_shape_0; conv5_1.K = 3;	conv5_1.pad = 1;
 	conv5_1.W = NULL;	conv5_1.b = NULL;	conv5_1.stride = 1; conv5_1.top_shape.z = 128;
-	conv5_1.top_shape.x = (conv5_1.bot_shape->x - conv5_1.K + 1 + 2*conv5_1.pad)/conv5_1.stride + 1;
-	conv5_1.top_shape.y = (conv5_1.bot_shape->y - conv5_1.K + 1 + 2*conv5_1.pad)/conv5_1.stride + 1;
+	conv5_1.top_shape.x = (conv5_1.bot_shape->x - conv5_1.K + 1 + 2*conv5_1.pad + conv5_1.stride-1)/conv5_1.stride;
+	conv5_1.top_shape.y = (conv5_1.bot_shape->y - conv5_1.K + 1 + 2*conv5_1.pad + conv5_1.stride-1)/conv5_1.stride;
 
 	conv5_2.bot_shape = &slice3.top_shape_1; conv5_2.K = 3; conv5_2.pad = 1;
 	conv5_2.W = NULL;	conv5_2.b = NULL; conv5_2.stride = 1; conv5_2.top_shape.z = 128;
-	conv5_2.top_shape.x = (conv5_2.bot_shape->x - conv5_2.K + 1 + 2*conv5_2.pad)/conv5_2.stride + 1;
-	conv5_2.top_shape.y = (conv5_2.bot_shape->y - conv5_2.K + 1 + 2*conv5_2.pad)/conv5_2.stride + 1;
+	conv5_2.top_shape.x = (conv5_2.bot_shape->x - conv5_2.K + 1 + 2*conv5_2.pad + conv5_2.stride-1)/conv5_2.stride;
+	conv5_2.top_shape.y = (conv5_2.bot_shape->y - conv5_2.K + 1 + 2*conv5_2.pad + conv5_2.stride-1)/conv5_2.stride;
 
 	concat3.bot_shape_0 = &conv5_1.top_shape; concat3.bot_shape_1 = &conv5_2.top_shape;
 	concat3.top_shape.x = concat3.bot_shape_0->x; concat3.top_shape.y = concat3.bot_shape_0->y; concat3.top_shape.z = concat3.bot_shape_0->z + concat3.bot_shape_1->z;
 
+	std::cout << "conv5:" << concat3.top_shape.z << "," << concat3.top_shape.y << "," << concat3.top_shape.x << endl;
 	relu5.bot_shape = &concat3.top_shape; relu5.type = RELU; relu5.top_shape.x = relu5.bot_shape->x;
 	relu5.top_shape.y = relu5.bot_shape->y; relu5.top_shape.z = relu5.bot_shape->z;
 
 	pool5.bot_shape = &relu5.top_shape; pool5.type = MAX; pool5.stride = 2; pool5.winSize = 3; pool5.pad = 0;
-	pool5.top_shape.x = ceil((pool5.bot_shape->x - pool5.winSize)/(float)pool5.stride) + 1;
-	pool5.top_shape.y = ceil((pool5.bot_shape->y - pool5.winSize)/(float)pool5.stride) + 1;
+	pool5.top_shape.x = (pool5.bot_shape->x + 2*pool5.pad - pool5.winSize + 1 + pool5.stride - 1)/pool5.stride;
+	pool5.top_shape.y = (pool5.bot_shape->y + 2*pool5.pad - pool5.winSize + 1 + pool5.stride - 1)/pool5.stride;
 	pool5.top_shape.z = pool5.bot_shape->z;
 
+	std::cout << "pool5:" << pool5.top_shape.z << "," << pool5.top_shape.y << "," << pool5.top_shape.x << endl;
 	fc6.bot_shape = &pool5.top_shape; fc6.W = NULL;	fc6.b = NULL; fc6.no_units = 4096;
 	fc6.top_shape.z = 1; fc6.top_shape.y = 1; fc6.top_shape.x = fc6.no_units;
+	std::cout << "fc6:" << fc6.top_shape.z << "," << fc6.top_shape.y << "," << fc6.top_shape.x << endl;
 	relu6.bot_shape = &fc6.top_shape; relu6.type = RELU; relu6.top_shape.x = relu6.bot_shape->x;
 	relu6.top_shape.y = relu6.bot_shape->y; relu6.top_shape.z = relu6.bot_shape->z;
 
 	fc7.bot_shape = &relu6.top_shape; fc7.W = NULL;	fc7.b = NULL; fc7.no_units = 4096;
 	fc7.top_shape.z = 1; fc7.top_shape.y = 1; fc7.top_shape.x = fc7.no_units;
+	std::cout << "fc7:" << fc7.top_shape.z << "," << fc7.top_shape.y << "," << fc7.top_shape.x << endl;
 	relu7.bot_shape = &fc7.top_shape; relu7.type = RELU; relu7.top_shape.x = relu7.bot_shape->x;
 	relu7.top_shape.y = relu7.bot_shape->y; relu7.top_shape.z = relu7.bot_shape->z;
 
 	fc8.bot_shape = &relu7.top_shape; fc8.W = NULL;	fc8.b = NULL; fc8.no_units = 1000;
 	fc8.top_shape.z = 1; fc8.top_shape.y = 1; fc8.top_shape.x = fc8.no_units;
+	std::cout << "fc8:" << fc8.top_shape.z << "," << fc8.top_shape.y << "," << fc8.top_shape.x << endl;
 
 	smax.bot_shape = &fc8.top_shape; smax.type = SOFTMAX; smax.top_shape.x = smax.bot_shape->x;
 	smax.top_shape.y = smax.bot_shape->y; smax.top_shape.z = smax.bot_shape->z;
 }
+
+// Allocate host buffers for intermediate map storage.
+// Some of them are not going to be used as the layers directly communicate via device memory.
+// Still allocating to keep it uniform
 void allocateHostBuffer() {
 	cout << "Allocating host memory for inputs and outputs\n";
 	h_input_img.reset(conv1.bot_shape->x * conv1.bot_shape->y * conv1.bot_shape->z);
 	// FIXME: this buffer must be as large as the max buffer size required for concatenation. Check if the norm1 output
 	// requires largest buffer
-	h_concat_buff.reset((norm1.top_shape.x + 2*conv2_1.pad) * (norm1.top_shape.y + 2*conv2_1.pad) * norm1.top_shape.z);
-	h_concat_buff2.reset((norm1.top_shape.x + 2*conv2_1.pad) * (norm1.top_shape.y + 2*conv2_1.pad) * norm1.top_shape.z);
+	h_concat_buff.reset(concat1.top_shape.x * concat1.top_shape.y * concat1.top_shape.z);
+	h_concat_buff2.reset(concat1.top_shape.x * concat1.top_shape.y * concat1.top_shape.z);
 	allocConvHostBuff(conv1);
 	// ActLayer performs in-place ops. No need of output buffer.
 	relu1.h_input = &conv1.h_output;
@@ -461,6 +557,7 @@ void allocateHostBuffer() {
 
 	smax.h_input = &fc8.h_output;
 	smax.h_output = smax.h_input;
+
 }
 
 
@@ -471,8 +568,7 @@ void allocateDeviceBuffer() {
 	// FIXME: this buffer must be as large as the max buffer size required for concatenation. Check if the norm1 output
 	// requires largest buffer
 	d_concat_buff = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_1_ALTERA,
-		(norm1.top_shape.x + 2*conv2_1.pad) * (norm1.top_shape.y + 2*conv2_1.pad) * norm1.top_shape.z * sizeof(DTYPE), NULL, &status);
-
+		concat1.top_shape.x *concat1.top_shape.y * concat1.top_shape.z * sizeof(DTYPE), NULL, &status);
 	allocConvDevBuff(context, conv1);
 	// ActLayer performs in-place ops. No need of output buffer.
 	relu1.d_input = &conv1.d_output;
@@ -574,8 +670,15 @@ bool init_opencl() {
 	cout << "OpenCL init done" << endl;
 	return true;
 }
+
 void cleanup() {
 	cout << "Releasing all OpenCL objects" << endl;
+	for(unsigned i = 0; i < num_kernels; ++i) {
+		if(kernel && kernel[i]) {
+			clReleaseKernel(kernel[i]);
+		}
+	}
+
 	clReleaseMemObject(d_concat_buff);
 	freeConvDevBuff(conv1);
 	freePoolDevBuff(pool1);
@@ -593,4 +696,19 @@ void cleanup() {
 	freeFcDevBuff(fc6);
 	freeFcDevBuff(fc7);
 	freeFcDevBuff(fc8);
+	if(queue) {
+		clReleaseCommandQueue(queue);
+	}
+	if(program) {
+		clReleaseProgram(program);
+	}
+	if(context) {
+		clReleaseContext(context);
+	}
+
+	full_model.destruct();
+	delete[] norm1.scale;
+	delete[] norm1.offset;
+	delete[] norm2.scale;
+	delete[] norm2.offset;
 }

@@ -81,7 +81,7 @@ $(TARGET_DIR)/$(TARGET) : Makefile $(SRCS) $(INCS) $(TARGET_DIR)
 $(TARGET_DIR) :
 	$(ECHO)mkdir $(TARGET_DIR)
 emu: $(TARGET_DIR)/$(TARGET)
-	$(TARGET_DIR)/$(TARGET) -m sample
+	CL_CONTEXT_EMULATOR_DEVICE_ALTERA=1 $(TARGET_DIR)/$(TARGET) -model=../../../models/alexnet_full_precision_iter_140112.npz
 # Standard make targets
 clean :
 	$(ECHO)rm -f $(TARGET_DIR)/$(TARGET)

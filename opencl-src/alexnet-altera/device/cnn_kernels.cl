@@ -32,7 +32,7 @@ __kernel void conv_3d(
 		for(unsigned int r = hstart; r < hend; r++) {
 			for(unsigned int c = wstart; c < wend; c++) {
 				pix = p_maps[((map*in_height) + r )*in_width + c];
-				w = p_weights[filter_start + map * K * K + (r-hstart)*K + c - wstart]
+				w = p_weights[filter_start + map * K * K + (r-hstart)*K + c - wstart];
 				sum += pix * w;
 			}
 		}
@@ -58,8 +58,10 @@ __kernel void maxpool3D(
 	float maxval = -3.402823e+37;
 	int hstart = y*nStride;
 	int wstart = x*nStride;
-	int hend = min(hstart+nPoolsize, iHeight);
-	int wend = min(wstart+nPoolsize, iWidth);
+	//int hend = min(hstart+nPoolsize, iHeight);
+	//int wend = min(wstart+nPoolsize, iWidth);
+	int hend = hstart+nPoolsize;
+	int wend = wstart+nPoolsize;
 	for(unsigned int r = hstart; r < hend; r++) {
 		for(unsigned int c = wstart; c < wend; c++) {
 			unsigned int idx = z*iHeight*iWidth + r * iWidth + c;
@@ -98,13 +100,14 @@ __kernel void relu_layer (__global float * pData)
 __kernel void softmax(
         __global float * pdata)
 {
-        __local float sum, temp[10];
+        __local float sum, temp[1000];
         const int x = get_local_id(0);
         temp[x] = exp(pdata[x]);
 
         barrier(CLK_LOCAL_MEM_FENCE);
         if(get_local_id(0)==0)
         {
+			sum = 0;
           for(int i=0; i< get_local_size(0); i++)
                 sum += temp[i];
         }
