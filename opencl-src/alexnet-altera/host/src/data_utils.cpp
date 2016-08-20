@@ -77,7 +77,7 @@ void zeropadAndTx(const aocl_utils::scoped_aligned_ptr<DTYPE> &src, aocl_utils::
 		}
 	}
 	if(h2d_tx) {
-		std::cout << "Sending data to device buffer" << std::endl;
+		//std::cout << "Sending data to device buffer" << std::endl;
 		status = clEnqueueWriteBuffer(queue, device_buff, CL_FALSE, 0,
 			n_ch * dst_h * dst_w * sizeof(DTYPE), dst, 0, NULL, NULL);
 		checkError(status, "Failed to transfer data to the device\n");

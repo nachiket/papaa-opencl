@@ -98,22 +98,22 @@ __kernel void relu_layer (__global float * pData)
 
 // Need to do piecewise linear approximation for exp(x)
 __kernel void softmax(
-        __global float * pdata)
-{
-        __local float sum, temp[1000];
-        const int x = get_local_id(0);
-        temp[x] = exp(pdata[x]);
+	__global float * pdata) {
 
-        barrier(CLK_LOCAL_MEM_FENCE);
-        if(get_local_id(0)==0)
-        {
-			sum = 0;
-          for(int i=0; i< get_local_size(0); i++)
-                sum += temp[i];
-        }
-        barrier(CLK_LOCAL_MEM_FENCE);
+	__local float sum, prob[1000];
+	const int x = get_global_id(0);
+	prob[x] = exp(pdata[x]);
 
-        pdata[x] = temp[x]/sum; 
+	barrier(CLK_LOCAL_MEM_FENCE);
+	if(x == 0) {
+		sum = 0;
+		for(int i=0; i< get_global_size(0); i++) {
+			sum += prob[i];
+		}
+	}
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	pdata[x] = prob[x]/sum; 
 }
 
 __kernel void batch_norm_layer(

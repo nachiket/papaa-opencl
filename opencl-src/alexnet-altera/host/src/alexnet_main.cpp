@@ -198,7 +198,7 @@ unsigned int runApplication() {
 	size_t global_work_size[3];
 	size_t local_work_size[3];
 	scoped_array<cl_event> kernel_event(24);
-
+	std::cout << "------Starting execution----" << std::endl;
 	const double start_time = getCurrentTimestamp();
 
 	// zero pad the input image and transfer to device memory allocated for conv1 input.
@@ -217,7 +217,6 @@ unsigned int runApplication() {
 	setKernelArgs(norm1, kernel[5], global_work_size);
 	status = clEnqueueNDRangeKernel(queue, kernel[5], 3, NULL, global_work_size, NULL, 1, &kernel_event[2], &kernel_event[3]);
 	checkError(status, "Failed to launch norm1 kernel");
-	cout << "norm1 done" << endl;
 	// read the norm1 output and zero pad appropriately and then split maps to feed into 2 conv layers(group = 2)
 	status = clEnqueueReadBuffer(queue, norm1.d_output, CL_TRUE, 0,
 		norm1.top_shape.x * norm1.top_shape.y * norm1.top_shape.z * sizeof(DTYPE), norm1.h_output, 1, &kernel_event[3], NULL);
@@ -367,12 +366,12 @@ unsigned int runApplication() {
 	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 1, &kernel_event[21], &kernel_event[22]);
 	checkError(status, "Failed to launch fc8 kernel");
 
-	setKernelArgs(smax, kernel[4], global_work_size);
+	//setKernelArgs(smax, kernel[4], global_work_size);
 	local_work_size[0] = global_work_size[0];
 	local_work_size[1] = global_work_size[1];
 	local_work_size[2] = global_work_size[2];
-	status = clEnqueueNDRangeKernel(queue, kernel[4], 3, NULL, global_work_size, local_work_size, 1, &kernel_event[17], &kernel_event[23]);
-	checkError(status, "Failed to launch smax kernel");
+	//status = clEnqueueNDRangeKernel(queue, kernel[4], 3, NULL, global_work_size, local_work_size, 1, &kernel_event[22], &kernel_event[23]);
+	//checkError(status, "Failed to launch smax kernel");
 	clFinish(queue);
 
 	const double end_time = getCurrentTimestamp();
