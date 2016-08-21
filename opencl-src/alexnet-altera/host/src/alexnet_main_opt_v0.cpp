@@ -21,7 +21,7 @@ using namespace cv;
 
 cl_platform_id platform = NULL;
 unsigned num_devices = 0;
-unsigned num_kernels = 6;
+unsigned num_kernels = 5;
 scoped_array<cl_device_id> devices;
 cl_device_id target_device;
 cl_context context = NULL;
@@ -31,34 +31,28 @@ scoped_array<cl_kernel> kernel;
 
 scoped_aligned_ptr<DTYPE> h_input_img;
 ConvLayer conv1;
-ActLayer relu1;
 PoolLayer pool1;
 BatchNormLayer norm1;
 SliceLayer slice1;
 ConvLayer conv2_1;
 ConvLayer conv2_2;
 ConcatLayer concat1;
-ActLayer relu2;
 PoolLayer pool2;
 BatchNormLayer norm2;
 
 ConvLayer conv3;
-ActLayer relu3;
 SliceLayer slice2;
 ConvLayer conv4_1;
 ConvLayer conv4_2;
 ConcatLayer concat2;
-ActLayer relu4;
 
 SliceLayer slice3;
 ConvLayer conv5_1;
 ConvLayer conv5_2;
 ConcatLayer concat3;
-ActLayer relu5;
 PoolLayer pool5;
 
 FcLayer fc6;
-ActLayer relu6;
 FcLayer fc7;
 ActLayer relu7;
 FcLayer fc8;
@@ -197,7 +191,7 @@ unsigned int runApplication() {
 	cl_int status;
 	size_t global_work_size[3];
 	size_t local_work_size[3];
-	scoped_array<cl_event> kernel_event(24);
+	scoped_array<cl_event> kernel_event(17);
 	std::cout << "------Starting execution----" << std::endl;
 	const double start_time = getCurrentTimestamp();
 
@@ -208,18 +202,16 @@ unsigned int runApplication() {
 	setKernelArgs(conv1, kernel[0], conv1.d_input, global_work_size);
 	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[0]);
 	checkError(status, "Failed to launch conv1 kernel");
-	setKernelArgs(relu1, kernel[3], global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 1, &kernel_event[0], &kernel_event[1]);
-	checkError(status, "Failed to launch relu1 kernel");
 	setKernelArgs(pool1, kernel[1], global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[1], 3, NULL, global_work_size, NULL, 1, &kernel_event[1], &kernel_event[2]);
+	status = clEnqueueNDRangeKernel(queue, kernel[1], 3, NULL, global_work_size, NULL, 1, &kernel_event[0], &kernel_event[1]);
 	checkError(status, "Failed to launch pool1 kernel");
-	setKernelArgs(norm1, kernel[5], global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[5], 3, NULL, global_work_size, NULL, 1, &kernel_event[2], &kernel_event[3]);
+	setKernelArgs(norm1, kernel[3], global_work_size);
+	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 1, &kernel_event[1], &kernel_event[2]);
 	checkError(status, "Failed to launch norm1 kernel");
+
 	// read the norm1 output and zero pad appropriately and then split maps to feed into 2 conv layers(group = 2)
 	status = clEnqueueReadBuffer(queue, norm1.d_output, CL_TRUE, 0,
-		norm1.top_shape.x * norm1.top_shape.y * norm1.top_shape.z * sizeof(DTYPE), norm1.h_output, 1, &kernel_event[3], NULL);
+		norm1.top_shape.x * norm1.top_shape.y * norm1.top_shape.z * sizeof(DTYPE), norm1.h_output, 1, &kernel_event[2], NULL);
 	checkError(status, "Failed to read data from the device");
 	zeropadAndTx(norm1.h_output, h_concat_buff, norm1.bot_shape->z,
 		norm1.bot_shape->y, norm1.bot_shape->x, conv2_1.pad, conv2_1.pad, conv2_1.d_input, queue, false);
@@ -235,50 +227,45 @@ unsigned int runApplication() {
 	clFinish(queue);
 	// conv2 layer, group size = 2
 	setKernelArgs(conv2_1, kernel[0], conv2_1.d_input, global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[4]);
+	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[3]);
 	checkError(status, "Failed to launch conv2_2 kernel");
 	setKernelArgs(conv2_2, kernel[0], conv2_2.d_input, global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[5]);
+	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[4]);
 	checkError(status, "Failed to launch conv2_2 kernel");
 	// read the output of split conv layers
 	status = clEnqueueReadBuffer(queue, conv2_1.d_output, CL_TRUE, 0,
-		conv2_1.top_shape.x * conv2_1.top_shape.y * conv2_1.top_shape.z * sizeof(DTYPE), h_concat_buff, 1, &kernel_event[4], NULL);
+		conv2_1.top_shape.x * conv2_1.top_shape.y * conv2_1.top_shape.z * sizeof(DTYPE), h_concat_buff, 1, &kernel_event[3], NULL);
 	status = clEnqueueReadBuffer(queue, conv2_2.d_output, CL_TRUE, 0,
 		conv2_2.top_shape.x * conv2_2.top_shape.y * conv2_2.top_shape.z * sizeof(DTYPE),
-		(DTYPE *)h_concat_buff + conv2_1.top_shape.x * conv2_1.top_shape.y * conv2_1.top_shape.z, 1, &kernel_event[5], NULL);
+		(DTYPE *)h_concat_buff + conv2_1.top_shape.x * conv2_1.top_shape.y * conv2_1.top_shape.z, 1, &kernel_event[4], NULL);
 	status = clEnqueueWriteBuffer(queue, d_concat_buff, CL_FALSE, 0,
-		relu2.bot_shape->x * relu2.bot_shape->y * relu2.bot_shape->z * sizeof(DTYPE),
+		pool2.bot_shape->x * pool2.bot_shape->y * pool2.bot_shape->z * sizeof(DTYPE),
 		h_concat_buff, 0, NULL, NULL);
 	clFinish(queue);
 	//
-	// relu2 -> pool2 -> norm2
-	setKernelArgs(relu2, kernel[3], global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[6]);
-	checkError(status, "Failed to launch relu1 kernel");
+	// pool2 -> norm2
 	setKernelArgs(pool2, kernel[1], global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[1], 3, NULL, global_work_size, NULL, 1, &kernel_event[6], &kernel_event[7]);
+	status = clEnqueueNDRangeKernel(queue, kernel[1], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[5]);
 	checkError(status, "Failed to launch pool2 kernel");
-	setKernelArgs(norm2, kernel[5], global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[5], 3, NULL, global_work_size, NULL, 1, &kernel_event[7], &kernel_event[8]);
+	setKernelArgs(norm2, kernel[3], global_work_size);
+	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 1, &kernel_event[5], &kernel_event[6]);
 	checkError(status, "Failed to launch norm1 kernel");
 	// read norm2 output and zero pad according to conv3 layer paramters
 	status = clEnqueueReadBuffer(queue, norm2.d_output, CL_TRUE, 0,
-		norm2.top_shape.x * norm2.top_shape.y * norm2.top_shape.z * sizeof(DTYPE), h_concat_buff, 1, &kernel_event[8], NULL);
+		norm2.top_shape.x * norm2.top_shape.y * norm2.top_shape.z * sizeof(DTYPE), h_concat_buff, 1, &kernel_event[6], NULL);
 	zeropadAndTx(h_concat_buff, conv3.h_input, conv3.bot_shape->z,
 		conv3.bot_shape->y, conv3.bot_shape->x, conv3.pad, conv3.pad, conv3.d_input, queue, true);
+	clFinish(queue);
 	// conv3 -> relu3
 	setKernelArgs(conv3, kernel[0], conv3.d_input, global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[9]);
+	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[7]);
 	checkError(status, "Failed to launch conv3 kernel");
-	setKernelArgs(relu3, kernel[3], global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 1, &kernel_event[9], &kernel_event[10]);
-	checkError(status, "Failed to launch relu3 kernel");
-	// read the relu3 output and zero pad appropriately and then split maps to feed into 2 conv layers(group = 2)
-	status = clEnqueueReadBuffer(queue, *relu3.d_output, CL_TRUE, 0,
-		relu3.top_shape.x * relu3.top_shape.y * relu3.top_shape.z * sizeof(DTYPE), *relu3.h_output, 1, &kernel_event[10], NULL);
+	// read the conv3 output and zero pad appropriately and then split maps to feed into 2 conv layers(group = 2)
+	status = clEnqueueReadBuffer(queue, conv3.d_output, CL_TRUE, 0,
+		conv3.top_shape.x * conv3.top_shape.y * conv3.top_shape.z * sizeof(DTYPE), conv3.h_output, 1, &kernel_event[7], NULL);
 	checkError(status, "Failed to read data from the device");
-	zeropadAndTx(*relu3.h_output, h_concat_buff, relu3.bot_shape->z,
-		relu3.bot_shape->y, relu3.bot_shape->x, conv4_1.pad, conv4_1.pad, conv4_1.d_input, queue, false);
+	zeropadAndTx(conv3.h_output, h_concat_buff, conv3.bot_shape->z,
+		conv3.bot_shape->y, conv3.bot_shape->x, conv4_1.pad, conv4_1.pad, conv4_1.d_input, queue, false);
 	status = clEnqueueWriteBuffer(queue, conv4_1.d_input, CL_FALSE, 0,
 		conv4_1.bot_shape->z * (conv4_1.bot_shape->x+2*conv4_1.pad) * (conv4_1.bot_shape->y+2*conv4_1.pad) * sizeof(DTYPE),
 		h_concat_buff, 0, NULL, NULL);
@@ -291,86 +278,68 @@ unsigned int runApplication() {
 	clFinish(queue);
 	// conv4 layer, group size = 2
 	setKernelArgs(conv4_1, kernel[0], conv4_1.d_input, global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[11]);
+	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[8]);
 	checkError(status, "Failed to launch conv4_1 kernel");
 	setKernelArgs(conv4_2, kernel[0], conv4_2.d_input, global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[12]);
+	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[9]);
 	checkError(status, "Failed to launch conv4_2 kernel");
 	// read the output of split conv layers
 	status = clEnqueueReadBuffer(queue, conv4_1.d_output, CL_TRUE, 0,
-		conv4_1.top_shape.x * conv4_1.top_shape.y * conv4_1.top_shape.z * sizeof(DTYPE), h_concat_buff, 1, &kernel_event[11], NULL);
+		conv4_1.top_shape.x * conv4_1.top_shape.y * conv4_1.top_shape.z * sizeof(DTYPE), h_concat_buff, 1, &kernel_event[8], NULL);
 	status = clEnqueueReadBuffer(queue, conv4_2.d_output, CL_TRUE, 0,
 		conv4_2.top_shape.x * conv4_2.top_shape.y * conv4_2.top_shape.z * sizeof(DTYPE),
-		(DTYPE *)h_concat_buff + conv4_1.top_shape.x * conv4_1.top_shape.y * conv4_1.top_shape.z, 1, &kernel_event[12], NULL);
-	status = clEnqueueWriteBuffer(queue, d_concat_buff, CL_FALSE, 0,
-		relu4.bot_shape->x * relu4.bot_shape->y * relu4.bot_shape->z * sizeof(DTYPE),
-		h_concat_buff, 0, NULL, NULL);
-	clFinish(queue);
-	setKernelArgs(relu4, kernel[3], global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[13]);
-	checkError(status, "Failed to launch relu4 kernel");
-	// read the relu4 output and zero pad appropriately and then split maps to feed into conv5_x layers(group = 2)
-	status = clEnqueueReadBuffer(queue, *relu4.d_output, CL_TRUE, 0,
-		relu4.top_shape.x * relu4.top_shape.y * relu4.top_shape.z * sizeof(DTYPE), h_concat_buff2, 1, &kernel_event[13], NULL);
-	checkError(status, "Failed to read data from the device");
-	zeropadAndTx(h_concat_buff2, h_concat_buff, relu4.bot_shape->z,
-		relu4.bot_shape->y, relu4.bot_shape->x, conv5_1.pad, conv5_1.pad, conv5_1.d_input, queue, false);
+		(DTYPE *)h_concat_buff + conv4_1.top_shape.x * conv4_1.top_shape.y * conv4_1.top_shape.z, 1, &kernel_event[9], NULL);
+	zeropadAndTx(h_concat_buff, h_concat_buff2, concat2.top_shape.z,
+		concat2.top_shape.y, concat2.top_shape.x, conv5_1.pad, conv5_1.pad, conv5_1.d_input, queue, false);
 	status = clEnqueueWriteBuffer(queue, conv5_1.d_input, CL_FALSE, 0,
 		conv5_1.bot_shape->z * (conv5_1.bot_shape->x+2*conv5_1.pad) * (conv5_1.bot_shape->y+2*conv5_1.pad) * sizeof(DTYPE),
-		h_concat_buff, 0, NULL, NULL);
+		h_concat_buff2, 0, NULL, NULL);
 	status = clEnqueueWriteBuffer(queue, conv5_2.d_input, CL_FALSE, 0,
 		conv5_2.bot_shape->z * (conv5_2.bot_shape->x+2*conv5_2.pad) * (conv5_2.bot_shape->y+2*conv5_2.pad) * sizeof(DTYPE),
 		// split the maps into 2 half using pointer offset
-		(DTYPE *)h_concat_buff + conv5_1.bot_shape->z * (conv5_1.bot_shape->x+2*conv5_1.pad) * (conv5_1.bot_shape->y+2*conv5_1.pad),
+		(DTYPE *)h_concat_buff2 + conv5_1.bot_shape->z * (conv5_1.bot_shape->x+2*conv5_1.pad) * (conv5_1.bot_shape->y+2*conv5_1.pad),
 		0, NULL, NULL);
 	checkError(status, "Failed to transfer data to the device\n");
 	clFinish(queue);
 	// conv5 layer, group size = 2
 	setKernelArgs(conv5_1, kernel[0], conv5_1.d_input, global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[14]);
+	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[10]);
 	checkError(status, "Failed to launch conv5_1 kernel");
 	setKernelArgs(conv5_2, kernel[0], conv5_2.d_input, global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[15]);
+	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[11]);
 	checkError(status, "Failed to launch conv5_2 kernel");
 	// read the output of split conv layers
 	status = clEnqueueReadBuffer(queue, conv5_1.d_output, CL_TRUE, 0,
-		conv5_1.top_shape.x * conv5_1.top_shape.y * conv5_1.top_shape.z * sizeof(DTYPE), h_concat_buff, 1, &kernel_event[14], NULL);
+		conv5_1.top_shape.x * conv5_1.top_shape.y * conv5_1.top_shape.z * sizeof(DTYPE), h_concat_buff, 1, &kernel_event[10], NULL);
 	status = clEnqueueReadBuffer(queue, conv5_2.d_output, CL_TRUE, 0,
 		conv5_2.top_shape.x * conv5_2.top_shape.y * conv5_2.top_shape.z * sizeof(DTYPE),
-		(DTYPE *)h_concat_buff + conv5_1.top_shape.x * conv5_1.top_shape.y * conv5_1.top_shape.z, 1, &kernel_event[15], NULL);
+		(DTYPE *)h_concat_buff + conv5_1.top_shape.x * conv5_1.top_shape.y * conv5_1.top_shape.z, 1, &kernel_event[11], NULL);
 	status = clEnqueueWriteBuffer(queue, d_concat_buff, CL_FALSE, 0,
-		relu5.bot_shape->x * relu5.bot_shape->y * relu5.bot_shape->z * sizeof(DTYPE),
+		concat3.top_shape.x * concat3.top_shape.y * concat3.top_shape.z * sizeof(DTYPE),
 		h_concat_buff, 0, NULL, NULL);
 	clFinish(queue);
-	// relu5 -> pool5
-	setKernelArgs(relu5, kernel[3], global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[16]);
-	checkError(status, "Failed to launch relu5 kernel");
+	//  pool5
 	setKernelArgs(pool5, kernel[1], global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[1], 3, NULL, global_work_size, NULL, 1, &kernel_event[16], &kernel_event[17]);
+	status = clEnqueueNDRangeKernel(queue, kernel[1], 3, NULL, global_work_size, NULL, 0, NULL, &kernel_event[12]);
 	checkError(status, "Failed to launch pool5 kernel");
 	// fc6
-	setKernelArgs(fc6, kernel[2], global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 1, &kernel_event[17], &kernel_event[18]);
+	unsigned char act_en = 1;
+	setKernelArgs(fc6, kernel[2], &act_en, global_work_size);
+	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 1, &kernel_event[12], &kernel_event[13]);
 	checkError(status, "Failed to launch fc6 kernel");
-	setKernelArgs(relu6, kernel[3], global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 1, &kernel_event[18], &kernel_event[19]);
-	checkError(status, "Failed to launch relu6 kernel");
-	setKernelArgs(fc7, kernel[2], global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 1, &kernel_event[19], &kernel_event[20]);
+	setKernelArgs(fc7, kernel[2], &act_en, global_work_size);
+	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 1, &kernel_event[13], &kernel_event[14]);
 	checkError(status, "Failed to launch fc7 kernel");
-	setKernelArgs(relu7, kernel[3], global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 1, &kernel_event[20], &kernel_event[21]);
-	checkError(status, "Failed to launch relu5 kernel");
-	setKernelArgs(fc8, kernel[2], global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 1, &kernel_event[21], &kernel_event[22]);
+	act_en = 0;
+	setKernelArgs(fc8, kernel[2], &act_en, global_work_size);
+	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 1, &kernel_event[14], &kernel_event[15]);
 	checkError(status, "Failed to launch fc8 kernel");
 
 	setKernelArgs(smax, kernel[4], global_work_size);
 	local_work_size[0] = global_work_size[0];
 	local_work_size[1] = global_work_size[1];
 	local_work_size[2] = global_work_size[2];
-	status = clEnqueueNDRangeKernel(queue, kernel[4], 3, NULL, global_work_size, local_work_size, 1, &kernel_event[22], &kernel_event[23]);
+	status = clEnqueueNDRangeKernel(queue, kernel[4], 3, NULL, global_work_size, local_work_size, 1, &kernel_event[15], &kernel_event[16]);
 	checkError(status, "Failed to launch smax kernel");
 	clFinish(queue);
 
@@ -393,10 +362,8 @@ void initNetParams(DataShape &input_shape) {
 	conv1.top_shape.y = (conv1.bot_shape->y - conv1.K + 1 + 2*conv1.pad + conv1.stride-1)/conv1.stride;
 
 	std::cout << "conv1:" << conv1.top_shape.z << "," << conv1.top_shape.y << "," << conv1.top_shape.x << endl;
-	relu1.bot_shape = &conv1.top_shape; relu1.type = RELU; relu1.top_shape.x = relu1.bot_shape->x;
-	relu1.top_shape.y = relu1.bot_shape->y; relu1.top_shape.z = relu1.bot_shape->z;
 
-	pool1.bot_shape = &relu1.top_shape; pool1.type = MAX; pool1.stride = 2; pool1.winSize = 3; pool1.pad = 0;
+	pool1.bot_shape = &conv1.top_shape; pool1.type = MAX; pool1.stride = 2; pool1.winSize = 3; pool1.pad = 0;
 	// See Lasagne Pool layer output calculation
 	pool1.top_shape.x = (pool1.bot_shape->x + 2*pool1.pad - pool1.winSize + 1 + pool1.stride - 1)/pool1.stride;
 	pool1.top_shape.y = (pool1.bot_shape->y + 2*pool1.pad - pool1.winSize + 1 + pool1.stride - 1)/pool1.stride;
@@ -422,10 +389,8 @@ void initNetParams(DataShape &input_shape) {
 	concat1.top_shape.x = concat1.bot_shape_0->x; concat1.top_shape.y = concat1.bot_shape_0->y; concat1.top_shape.z = concat1.bot_shape_0->z + concat1.bot_shape_1->z;
 
 	std::cout << "conv2:" << concat1.top_shape.z << "," << concat1.top_shape.y << "," << concat1.top_shape.x << endl;
-	relu2.bot_shape = &concat1.top_shape; relu2.type = RELU; relu2.top_shape.x = relu2.bot_shape->x;
-	relu2.top_shape.y = relu2.bot_shape->y; relu2.top_shape.z = relu2.bot_shape->z;
 
-	pool2.bot_shape = &relu2.top_shape; pool2.type = MAX; pool2.stride = 2; pool2.winSize = 3; pool2.pad = 0;
+	pool2.bot_shape = &concat1.top_shape; pool2.type = MAX; pool2.stride = 2; pool2.winSize = 3; pool2.pad = 0;
 	pool2.top_shape.x = (pool2.bot_shape->x + 2*pool2.pad - pool2.winSize + 1 + pool2.stride - 1)/pool2.stride;
 	pool2.top_shape.y = (pool2.bot_shape->y + 2*pool2.pad - pool2.winSize + 1 + pool2.stride - 1)/pool2.stride;
 	pool2.top_shape.z = pool2.bot_shape->z;
@@ -437,10 +402,8 @@ void initNetParams(DataShape &input_shape) {
 	conv3.W = NULL;	conv3.b = NULL;	conv3.stride = 1; conv3.top_shape.z = 384;
 	conv3.top_shape.x = (conv3.bot_shape->x - conv3.K + 1 + 2*conv3.pad + conv3.stride-1)/conv3.stride;
 	conv3.top_shape.y = (conv3.bot_shape->y - conv3.K + 1 + 2*conv3.pad + conv3.stride-1)/conv3.stride;
-	relu3.bot_shape = &conv3.top_shape; relu3.type = RELU; relu3.top_shape.x = relu3.bot_shape->x;
-	relu3.top_shape.y = relu3.bot_shape->y; relu3.top_shape.z = relu3.bot_shape->z;
 	std::cout << "conv3:" << conv3.top_shape.z << "," << conv3.top_shape.y << "," << conv3.top_shape.x << std::endl;
-	slice2.bot_shape = &relu3.top_shape;
+	slice2.bot_shape = &conv3.top_shape;
 	slice2.top_shape_0.x = slice2.bot_shape->x; slice2.top_shape_0.y = slice2.bot_shape->y; slice2.top_shape_0.z = slice2.bot_shape->z/2;
 	slice2.top_shape_1.x = slice2.bot_shape->x; slice2.top_shape_1.y = slice2.bot_shape->y; slice2.top_shape_1.z = slice2.bot_shape->z/2;
 
@@ -457,10 +420,8 @@ void initNetParams(DataShape &input_shape) {
 	concat2.bot_shape_0 = &conv4_1.top_shape; concat2.bot_shape_1 = &conv4_2.top_shape;
 	concat2.top_shape.x = concat2.bot_shape_0->x; concat2.top_shape.y = concat2.bot_shape_0->y; concat2.top_shape.z = concat2.bot_shape_0->z + concat2.bot_shape_1->z;
 
-	relu4.bot_shape = &concat2.top_shape; relu4.type = RELU; relu4.top_shape.x = relu4.bot_shape->x;
-	relu4.top_shape.y = relu4.bot_shape->y; relu4.top_shape.z = relu4.bot_shape->z;
 
-	slice3.bot_shape = &relu4.top_shape;
+	slice3.bot_shape = &concat2.top_shape;
 	slice3.top_shape_0.x = slice3.bot_shape->x; slice3.top_shape_0.y = slice3.bot_shape->y; slice3.top_shape_0.z = slice3.bot_shape->z/2;
 	slice3.top_shape_1.x = slice3.bot_shape->x; slice3.top_shape_1.y = slice3.bot_shape->y; slice3.top_shape_1.z = slice3.bot_shape->z/2;
 
@@ -478,10 +439,8 @@ void initNetParams(DataShape &input_shape) {
 	concat3.top_shape.x = concat3.bot_shape_0->x; concat3.top_shape.y = concat3.bot_shape_0->y; concat3.top_shape.z = concat3.bot_shape_0->z + concat3.bot_shape_1->z;
 
 	std::cout << "conv5:" << concat3.top_shape.z << "," << concat3.top_shape.y << "," << concat3.top_shape.x << endl;
-	relu5.bot_shape = &concat3.top_shape; relu5.type = RELU; relu5.top_shape.x = relu5.bot_shape->x;
-	relu5.top_shape.y = relu5.bot_shape->y; relu5.top_shape.z = relu5.bot_shape->z;
 
-	pool5.bot_shape = &relu5.top_shape; pool5.type = MAX; pool5.stride = 2; pool5.winSize = 3; pool5.pad = 0;
+	pool5.bot_shape = &concat3.top_shape; pool5.type = MAX; pool5.stride = 2; pool5.winSize = 3; pool5.pad = 0;
 	pool5.top_shape.x = (pool5.bot_shape->x + 2*pool5.pad - pool5.winSize + 1 + pool5.stride - 1)/pool5.stride;
 	pool5.top_shape.y = (pool5.bot_shape->y + 2*pool5.pad - pool5.winSize + 1 + pool5.stride - 1)/pool5.stride;
 	pool5.top_shape.z = pool5.bot_shape->z;
@@ -490,16 +449,12 @@ void initNetParams(DataShape &input_shape) {
 	fc6.bot_shape = &pool5.top_shape; fc6.W = NULL;	fc6.b = NULL; fc6.no_units = 4096;
 	fc6.top_shape.z = 1; fc6.top_shape.y = 1; fc6.top_shape.x = fc6.no_units;
 	std::cout << "fc6:" << fc6.top_shape.z << "," << fc6.top_shape.y << "," << fc6.top_shape.x << endl;
-	relu6.bot_shape = &fc6.top_shape; relu6.type = RELU; relu6.top_shape.x = relu6.bot_shape->x;
-	relu6.top_shape.y = relu6.bot_shape->y; relu6.top_shape.z = relu6.bot_shape->z;
 
-	fc7.bot_shape = &relu6.top_shape; fc7.W = NULL;	fc7.b = NULL; fc7.no_units = 4096;
+	fc7.bot_shape = &fc6.top_shape; fc7.W = NULL;	fc7.b = NULL; fc7.no_units = 4096;
 	fc7.top_shape.z = 1; fc7.top_shape.y = 1; fc7.top_shape.x = fc7.no_units;
 	std::cout << "fc7:" << fc7.top_shape.z << "," << fc7.top_shape.y << "," << fc7.top_shape.x << endl;
-	relu7.bot_shape = &fc7.top_shape; relu7.type = RELU; relu7.top_shape.x = relu7.bot_shape->x;
-	relu7.top_shape.y = relu7.bot_shape->y; relu7.top_shape.z = relu7.bot_shape->z;
 
-	fc8.bot_shape = &relu7.top_shape; fc8.W = NULL;	fc8.b = NULL; fc8.no_units = 1000;
+	fc8.bot_shape = &fc7.top_shape; fc8.W = NULL;	fc8.b = NULL; fc8.no_units = 1000;
 	fc8.top_shape.z = 1; fc8.top_shape.y = 1; fc8.top_shape.x = fc8.no_units;
 	std::cout << "fc8:" << fc8.top_shape.z << "," << fc8.top_shape.y << "," << fc8.top_shape.x << endl;
 
@@ -519,40 +474,26 @@ void allocateHostBuffer() {
 	h_concat_buff2.reset(concat1.top_shape.x * concat1.top_shape.y * concat1.top_shape.z);
 	allocConvHostBuff(conv1);
 	// ActLayer performs in-place ops. No need of output buffer.
-	relu1.h_input = &conv1.h_output;
-	relu1.h_output = relu1.h_input;
 	allocPoolHostBuff(pool1);
 	allocNormHostBuff(norm1, pool1.h_output);
 
 	allocConvHostBuff(conv2_1);
 	allocConvHostBuff(conv2_2);
-	relu2.h_input = &h_concat_buff;
-	relu2.h_output = relu2.h_input;
 	allocPoolHostBuff(pool2);
 	allocNormHostBuff(norm2, pool2.h_output);
 
 	allocConvHostBuff(conv3);
-	relu3.h_input = &conv3.h_output;
-	relu3.h_output = relu3.h_input;
 
 	allocConvHostBuff(conv4_1);
 	allocConvHostBuff(conv4_2);
-	relu4.h_input = &h_concat_buff;
-	relu4.h_output = relu4.h_input;
 
 	allocConvHostBuff(conv5_1);
 	allocConvHostBuff(conv5_2);
-	relu5.h_input = &h_concat_buff;
-	relu5.h_output = relu5.h_input;
 	allocPoolHostBuff(pool5);
 
 	allocFcHostBuff(fc6, pool5.h_output);
-	relu6.h_input = &fc6.h_output;
-	relu6.h_output = relu6.h_input;
-	allocFcHostBuff(fc7, *relu6.h_output);
-	relu7.h_input = &fc7.h_output;
-	relu7.h_output = relu7.h_input;
-	allocFcHostBuff(fc8, *relu7.h_output);
+	allocFcHostBuff(fc7, fc6.h_output);
+	allocFcHostBuff(fc8, fc7.h_output);
 
 	smax.h_input = &fc8.h_output;
 	smax.h_output = smax.h_input;
@@ -570,40 +511,26 @@ void allocateDeviceBuffer() {
 		concat1.top_shape.x *concat1.top_shape.y * concat1.top_shape.z * sizeof(DTYPE), NULL, &status);
 	allocConvDevBuff(context, conv1);
 	// ActLayer performs in-place ops. No need of output buffer.
-	relu1.d_input = &conv1.d_output;
-	relu1.d_output = relu1.d_input;
-	allocPoolDevBuff(context, pool1, *relu1.d_output);
+	allocPoolDevBuff(context, pool1, conv1.d_output);
 	allocBatchNormDevBuff(context, norm1, pool1.d_output, norm1.top_shape.z);
 
 	allocConvDevBuff(context, conv2_1);
 	allocConvDevBuff(context, conv2_2);
-	relu2.d_input = &d_concat_buff;
-	relu2.d_output = relu2.d_input;
-	allocPoolDevBuff(context, pool2, *relu2.d_output);
+	allocPoolDevBuff(context, pool2, d_concat_buff);
 	allocBatchNormDevBuff(context, norm2, pool2.d_output, norm1.top_shape.z);
 
 	allocConvDevBuff(context, conv3);
-	relu3.d_input = &conv3.d_output;
-	relu3.d_output = relu3.d_input;
 
 	allocConvDevBuff(context, conv4_1);
 	allocConvDevBuff(context, conv4_2);
-	relu4.d_input = &d_concat_buff;
-	relu4.d_output = relu4.d_input;
 
 	allocConvDevBuff(context, conv5_1);
 	allocConvDevBuff(context, conv5_2);
-	relu5.d_input = &d_concat_buff;
-	relu5.d_output = relu5.d_input;
-	allocPoolDevBuff(context, pool5, *relu5.d_output);
+	allocPoolDevBuff(context, pool5, d_concat_buff);
 
 	allocFcDevBuff(context, fc6, pool5.d_output);
-	relu6.d_input = &fc6.d_output;
-	relu6.d_output = relu6.d_input;
-	allocFcDevBuff(context, fc7, *relu6.d_output);
-	relu7.d_input = &fc7.d_output;
-	relu7.d_output = relu7.d_input;
-	allocFcDevBuff(context, fc8, *relu7.d_output);
+	allocFcDevBuff(context, fc7, fc6.d_output);
+	allocFcDevBuff(context, fc8, fc7.d_output);
 
 	smax.d_input = &fc8.d_output;
 	smax.d_output = smax.d_input;
@@ -640,7 +567,7 @@ bool init_opencl() {
 	context = clCreateContext(NULL, num_devices, &target_device, &oclContextCallback, NULL, &status);
 	checkError(status, "Failed to create context");
 	
-	std::string binary_file = getBoardBinaryFile("cnn_kernels", target_device);
+	std::string binary_file = getBoardBinaryFile("cnn_kernels_opt_v0", target_device);
 	printf("Using AOCX: %s\n", binary_file.c_str());
 	program = createProgramFromBinary(context, binary_file.c_str(), &target_device, num_devices);
 	// Build the program that was just created.
@@ -654,17 +581,15 @@ bool init_opencl() {
 	checkError(status, "Failed to create command queue");
 	
 	// Kernel.
-	kernel[0] = clCreateKernel(program, "conv_3d", &status);
+	kernel[0] = clCreateKernel(program, "conv_3d_relu", &status);
 	checkError(status, "Failed to create kernel");
-	kernel[1] = clCreateKernel(program, "maxpool3D", &status);
+	kernel[1] = clCreateKernel(program, "maxpool_3d", &status);
 	checkError(status, "Failed to create kernel");
-	kernel[2] = clCreateKernel(program, "iplayer", &status);
+	kernel[2] = clCreateKernel(program, "fc_layer_relu", &status);
 	checkError(status, "Failed to create kernel");
-	kernel[3] = clCreateKernel(program, "relu_layer", &status);
+	kernel[3] = clCreateKernel(program, "batch_norm_layer", &status);
 	checkError(status, "Failed to create kernel");
 	kernel[4] = clCreateKernel(program, "softmax", &status);
-	checkError(status, "Failed to create kernel");
-	kernel[5] = clCreateKernel(program, "batch_norm_layer", &status);
 	checkError(status, "Failed to create kernel");
 	cout << "OpenCL init done" << endl;
 	return true;

@@ -10,6 +10,8 @@ void setKernelArgs(const PoolLayer &pool, const cl_kernel &kernel, size_t *globa
 
 void setKernelArgs(const FcLayer &fc, const cl_kernel &kernel, size_t *global_ws);
 
+void setKernelArgs(const FcLayer &fc, const cl_kernel &kernel, unsigned char *act_en, size_t *global_ws);
+
 void setKernelArgs(const ActLayer &act, const cl_kernel &kernel, size_t *global_ws);
 
 void setKernelArgs(const BatchNormLayer &bn, const cl_kernel &kernel, size_t *global_ws);

@@ -1,10 +1,11 @@
 //FIXME: If taking trained model from Lasagne, the conv filters flipped by default.
 //Either perform flip here OR disable flip during training !!!
-__kernel void conv_3d(
-	const __global float *p_maps,
-	const __global float *p_weights,
-	const __global float *p_bias,
-	__global float * p_output,
+// 3D convolution + ReLU activation kernel
+__kernel void conv_3d_relu(
+	const __global float * restrict p_maps,
+	const __global float * restrict p_weights,
+	const __global float * restrict p_bias,
+	__global float * restrict p_output,
 	const unsigned int K,
 	const unsigned int stride,
 	const unsigned int no_inputs) {
@@ -28,6 +29,7 @@ __kernel void conv_3d(
 	int filter_start = z * K * K * no_inputs;
 	float pix, w;
 	float sum = 0.0;
+	float zero = 0.0;
 	for(unsigned int map = 0; map < no_inputs; map++) {
 		for(unsigned int r = hstart; r < hend; r++) {
 			for(unsigned int c = wstart; c < wend; c++) {
@@ -37,29 +39,28 @@ __kernel void conv_3d(
 			}
 		}
 	}
-	p_output[((z*out_height) + y) * out_width + x] = sum + p_bias[z];
+	sum += p_bias[z];
+	p_output[((z*out_height) + y) * out_width + x] = fmax(zero, sum);
 }
 
-__kernel void maxpool3D(
-        const __global float * pInput,
-        __global float * pOutput,
-        const int iWidth,
-        const int iHeight,
-        const int nPoolsize,
-        const int nStride)
-{
-        const int x = get_global_id(0); 
-        const int y = get_global_id(1);
-        const int z = get_global_id(2);
+__kernel void maxpool_3d(
+	const __global float * restrict pInput,
+	__global float * restrict pOutput,
+	const int iWidth,
+	const int iHeight,
+	const int nPoolsize,
+	const int nStride) {
 
-        const int oWidth  = get_global_size(0);
-        const int oHeight = get_global_size(1);
+	const int x = get_global_id(0); 
+	const int y = get_global_id(1);
+	const int z = get_global_id(2);
+	
+	const int oWidth  = get_global_size(0);
+	const int oHeight = get_global_size(1);
 
 	float maxval = -3.402823e+37;
 	int hstart = y*nStride;
 	int wstart = x*nStride;
-	//int hend = min(hstart+nPoolsize, iHeight);
-	//int wend = min(wstart+nPoolsize, iWidth);
 	int hend = hstart+nPoolsize;
 	int wend = wstart+nPoolsize;
 	for(unsigned int r = hstart; r < hend; r++) {
@@ -72,28 +73,30 @@ __kernel void maxpool3D(
 }
 
 
-__kernel void iplayer(
-        const __global float * pInput,
-        const __global float * pWeights,
-        __global float * pOutput,
-        const int nInputs,
-        const __global float * pBias)
-{
-        const int x = get_global_id(0);
-	const int idxstart = x*nInputs;
-        float sum = 0;
-        for (int i = 0; i <nInputs; i++) 
-        {
-           sum += pWeights[idxstart+i]*pInput[i];
-        }
-        pOutput[x] = sum + pBias[x];
-}
+// Perceptron layer + conditional ReLU activation
+__kernel void fc_layer_relu(
+	const __global float * restrict pInput,
+	const __global float * restrict pWeights,
+	__global float * restrict pOutput,
+	const int nInputs,
+	const __global float * restrict pBias,
+	const unsigned char act) {
 
-__kernel void relu_layer (__global float * pData)
-{
-        const int x = get_global_id(0);
-        float zero = 0.0;
-        pData[x] = fmax(zero,pData[x]);
+	const int x = get_global_id(0);
+	const int idxstart = x*nInputs;
+	float sum = 0;
+	float zero = 0;
+	#pragma unroll 8
+	for (int i = 0; i <nInputs; i++) 
+	{
+		sum += pWeights[idxstart+i]*pInput[i];
+	}
+	sum += pBias[x];
+	if(act == 1) {
+		pOutput[x] = fmax(zero, sum);
+	} else {
+		pOutput[x] = sum;
+	}
 }
 
 // Need to do piecewise linear approximation for exp(x)
@@ -102,13 +105,13 @@ __kernel void softmax(
 	__global float * pdata) {
 
 	__local float sum, prob[1000];
-	const int x = get_global_id(0);
+	const int x = get_local_id(0);
 	prob[x] = exp(pdata[x]);
 
 	barrier(CLK_LOCAL_MEM_FENCE);
 	if(x == 0) {
 		sum = 0;
-		for(int i=0; i< get_global_size(0); i++) {
+		for(int i=0; i< get_local_size(0); i++) {
 			sum += prob[i];
 		}
 	}
@@ -117,13 +120,12 @@ __kernel void softmax(
 	pdata[x] = prob[x]/sum; 
 }
 
-
 __kernel void batch_norm_layer(
-	__global float *pMaps,
+	__global float * restrict pMaps,
 	// TODO: use local memory for scale and offset
-	__global float *pScale,
-	__global float *pOffset,
-	__global float *pOutput) {
+	__global float * restrict pScale,
+	__global float * restrict pOffset,
+	__global float * restrict pOutput) {
 	
 	const int map_no = get_global_id(2);
 	const int row_no = get_global_id(1);

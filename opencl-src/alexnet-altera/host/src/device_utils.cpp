@@ -68,6 +68,33 @@ void setKernelArgs(const FcLayer &fc, const cl_kernel &kernel, size_t *global_ws
     global_ws[2] = fc.top_shape.z;
 }
 
+// Fully connected layer with conditional ReLU
+void setKernelArgs(const FcLayer &fc, const cl_kernel &kernel, unsigned char *act_en, size_t *global_ws) {
+	cl_int status;
+	unsigned argi = 0;
+
+	status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), fc.d_input);
+	checkError(status, "Failed to set argument %d", argi - 1);	
+	status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &fc.d_W);
+	checkError(status, "Failed to set argument %d", argi - 1);	
+	status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &fc.d_output);
+	checkError(status, "Failed to set argument %d", argi - 1);
+
+	unsigned int no_inputs = fc.bot_shape->x * fc.bot_shape->y * fc.bot_shape->z;
+	
+	status = clSetKernelArg(kernel, argi++, sizeof(unsigned int), &no_inputs);
+	checkError(status, "Failed to set argument %d", argi - 1);	
+	status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &fc.d_b);
+	checkError(status, "Failed to set argument %d", argi - 1);	
+
+	status = clSetKernelArg(kernel, argi++, sizeof(unsigned char), act_en);
+	checkError(status, "Failed to set argument %d", argi - 1);	
+
+    global_ws[0] = fc.top_shape.x;
+    global_ws[1] = fc.top_shape.y;
+    global_ws[2] = fc.top_shape.z;
+}
+
 void setKernelArgs(const ActLayer &act, const cl_kernel &kernel, size_t *global_ws) {
 	cl_int status;
 	unsigned argi = 0;
