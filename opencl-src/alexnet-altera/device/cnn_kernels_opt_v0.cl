@@ -26,23 +26,37 @@ __kernel void conv_3d_relu(
 	int wend = wstart + K;
 	int hend = hstart + K;
 
-	int filter_start = z * K * K * no_inputs;
+	const int filter_start = z * K * K * no_inputs;
+	int F = (int)K;
 	float pix, w;
-	float sum = 0.0;
+	float4 sum4 = 0.0;
 	float zero = 0.0;
+	float sum = 0.0;
 	for(unsigned int map = 0; map < no_inputs; map++) {
-		for(unsigned int r = hstart; r < hend; r++) {
-			for(unsigned int c = wstart; c < wend; c++) {
-				pix = p_maps[((map*in_height) + r )*in_width + c];
-				w = p_weights[filter_start + map * K * K + (r-hstart)*K + c - wstart];
-				sum += pix * w;
+		#pragma unroll 3
+		for(unsigned int r = 0; r < K; r++) {
+			const int fstart = filter_start + map * K * K + r * K;
+			const int map_start = ((map * in_height) + hstart + r) * in_width + wstart;
+			int c = 0;
+			int c4 = 0;
+			// vector ops
+			while(c <= F-4) {
+				float4 filter4 = vload4(c4, p_weights + fstart);
+				float4 data4 = vload4(c4, p_maps + map_start);
+				sum4 += filter4 * data4;
+				c += 4;
+				c4++;
 			}
+			// remaining columns
+			for(int c1 = c; c1 < K; c1++) {
+				sum4.x += p_weights[fstart + c1] * p_maps[map_start + c1];
+			}
+
 		}
 	}
-	sum += p_bias[z];
+	sum = sum4.x + sum4.y + sum4.z + sum4.w + p_bias[z];
 	p_output[((z*out_height) + y) * out_width + x] = fmax(zero, sum);
 }
-
 __kernel void maxpool_3d(
 	const __global float * restrict pInput,
 	__global float * restrict pOutput,
@@ -100,15 +114,16 @@ __kernel void fc_layer_relu(
 }
 
 // Need to do piecewise linear approximation for exp(x)
+// Just implementing exp here. Normalizing probalities to be carried out on the host.
 __attribute__((max_work_group_size(1000)))
 __kernel void softmax(
 	__global float * pdata) {
 
-	__local float sum, prob[1000];
-	const int x = get_local_id(0);
-	prob[x] = exp(pdata[x]);
+	//__local float sum, prob[1000];
+	const int x = get_global_id(0);
+	pdata[x] = exp(pdata[x]);
 
-	barrier(CLK_LOCAL_MEM_FENCE);
+	/*barrier(CLK_LOCAL_MEM_FENCE);
 	if(x == 0) {
 		sum = 0;
 		for(int i=0; i< get_local_size(0); i++) {
@@ -117,8 +132,10 @@ __kernel void softmax(
 	}
 	barrier(CLK_LOCAL_MEM_FENCE);
 
-	pdata[x] = prob[x]/sum; 
+	pdata[x] = prob[x]/sum;
+	pdata[x] = prob[x];	*/
 }
+
 
 __kernel void batch_norm_layer(
 	__global float * restrict pMaps,

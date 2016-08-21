@@ -208,7 +208,6 @@ unsigned int runApplication() {
 	setKernelArgs(norm1, kernel[3], global_work_size);
 	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 1, &kernel_event[1], &kernel_event[2]);
 	checkError(status, "Failed to launch norm1 kernel");
-
 	// read the norm1 output and zero pad appropriately and then split maps to feed into 2 conv layers(group = 2)
 	status = clEnqueueReadBuffer(queue, norm1.d_output, CL_TRUE, 0,
 		norm1.top_shape.x * norm1.top_shape.y * norm1.top_shape.z * sizeof(DTYPE), norm1.h_output, 1, &kernel_event[2], NULL);
