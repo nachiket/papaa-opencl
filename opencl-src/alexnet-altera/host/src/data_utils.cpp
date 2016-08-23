@@ -1,6 +1,6 @@
 #include "data_utils.h"
 #include <iostream>
-
+#include "opencv2/imgproc/imgproc.hpp"
 
 template<typename T>
 void showMat(T buff, int n_ch, int h, int w, int to_show=3) {
@@ -35,25 +35,41 @@ void cropImage(const cv::Mat &img, cv::Mat &crop_img, unsigned int H, unsigned i
 		}
 }
 
-void initInputImage(const cv::Mat &img, const cv::Mat &mean, aocl_utils::scoped_aligned_ptr<DTYPE> &h_input_img) {
-    uint8_t *p_img = (uint8_t *)img.data;
-	uint8_t *p_mean = (uint8_t *)mean.data;
-    uint8_t r,g,b, rm, gm, bm;
-	assert(img.channels() == mean.channels() && img.rows == mean.rows && img.cols == mean.cols);
-    unsigned int C = img.channels();
-	unsigned int W = img.cols;
-	unsigned int H = img.rows;
+void initInputImage(const cv::Mat &img, DTYPE *mean, aocl_utils::scoped_aligned_ptr<DTYPE> &h_input_img) {
+	// Resize image to be 256x256
+	cv::Mat res_img;
+	cv::Size size(256, 256);
+	cv::resize(img, res_img, size);
+	// mean normalization
+	cv::Mat mean_norm = cv::Mat::zeros(size, CV_32FC3);
+	DTYPE rm, gm, bm;
+	cv::Vec3b pixel_u8;
+	cv::Vec3f pixel_f;
+	for(int r = 0; r < res_img.rows; r++) {
+		for(int c = 0; c < res_img.cols; c++) {
+			pixel_u8 = res_img.at<cv::Vec3b>(r,c);
+			rm = mean[0*256*256+r*256+c];
+			gm = mean[1*256*256+r*256+c];
+			bm = mean[2*256*256+r*256+c];
+			pixel_f.val[0] = pixel_u8.val[0] - bm;
+			pixel_f.val[1] = pixel_u8.val[1] - gm;
+			pixel_f.val[2] = pixel_u8.val[2] - rm;
+			mean_norm.at<cv::Vec3f>(r,c) = pixel_f;
+		}
+	}	
+	cv::Mat crop_img;
+
+	cropImage(mean_norm, crop_img, 227, 227, CENTER);
+    unsigned int C = crop_img.channels();
+	unsigned int W = crop_img.cols;
+	unsigned int H = crop_img.rows;
     for(int row = 0; row < H; row++) {
         for(int col = 0; col < W; col++) {
-            b = p_img[row*W*C + col*C + 0];
-            g = p_img[row*W*C + col*C + 1];
-            r = p_img[row*W*C + col*C + 2];
-            bm = p_mean[row*W*C + col*C + 0];
-            gm = p_mean[row*W*C + col*C + 1];
-            rm = p_mean[row*W*C + col*C + 2];
-			h_input_img[0*H*W + row*W + col] = (DTYPE)(r - rm);
-			h_input_img[1*H*W + row*W + col] = (DTYPE)(g - rm);
-			h_input_img[2*H*W + row*W + col] = (DTYPE)(b - rm);
+			pixel_f = crop_img.at<cv::Vec3f>(row,col);
+			// BGR to RGB conversion will happen here by properly storing pixels in that manner.
+			h_input_img[0*H*W + row*W + col] = pixel_f[2];
+			h_input_img[1*H*W + row*W + col] = pixel_f[1];
+			h_input_img[2*H*W + row*W + col] = pixel_f[0];
         }
     }
 }

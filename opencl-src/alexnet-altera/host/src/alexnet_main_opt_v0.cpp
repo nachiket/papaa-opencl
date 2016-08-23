@@ -71,22 +71,33 @@ bool init_opencl();
 void initModel(std::string);
 void initNetParams(DataShape &input_shape);
 unsigned int runApplication();
+void testhook();
+
+void testConvLayer(ConvLayer &conv, std::string name = "conv");
+void testPoolLayer(PoolLayer &pool, std::string name = "pool");
+void testNormLayer(BatchNormLayer &norm, std::string name = "norm");
+void testFcLayer(FcLayer &fc, std::string name = "FC");
+void testSoftmaxLayer(ActLayer &act, std::string name = "Softmax");
 
 void printHelp(char *app) {
 	cout << "------------------------------------" << endl;
 	cout << "Usage:" << endl;
 	cout << app;
 	cout << " -model <model file>";
-	cout << " -m <mode>";
-	cout << " [-i] <image path>";
-	cout << " [-l] <image list>";
-	cout << " [-d] <test image dir>" << endl;
+	cout << " -mode <mode>";
+	cout << " [-img] <image path>";
+	cout << " [-list] <image list>";
+	cout << " [-dir] <test image dir>";
+	cout << " [-n] <no of samples to test>"	<< endl;
 	cout << "------------------------------------" << endl;
 }
 
 int main(int argc, char **argv) {
 	cout << "ImageNet object classification using AlexNet" << endl;
-	std::string model_path;
+	std::string model_path, mode, img_path, list_file, img_dir, mean_path;
+	cv::Mat input_img;
+	cnpy::NpyArray img_mean;
+	unsigned int no_samples, pred_label;
 	Options options(argc, argv);
 	if(options.has("model")) {
 		model_path = options.get<std::string>("model");
@@ -94,16 +105,139 @@ int main(int argc, char **argv) {
 		printHelp(argv[0]);
 		exit(1);
 	}
+
+	if(!options.has("mode")) {
+		cout << "Please specify the application mode(sample OR test)" << endl;
+		exit(1);
+	} else {
+		mode = options.get<string>("mode");
+	}
+
+	if(mode.compare("sample") == 0) {
+		if(options.has("img")) {
+			img_path = options.get<std::string>("img");
+		} else {
+			cout << "Please specify image path" << endl;
+			//exit(1);
+		}
+	} else if(mode.compare("test") == 0) {
+		if(options.has("list") && options.has("dir") && options.has("n")) {
+			list_file = options.get<string>("list");
+			img_dir = options.get<string>("dir");
+			no_samples = options.get<unsigned int>("n");
+		} else {
+			cout << "Need image list file, image directory and no of samples to test" << endl;
+			exit(1);
+		}
+	} else {
+		cout << "Invalid application mode(valid ones are <sample,test>)" << endl;
+		exit(1);
+	}
+	if(!options.has("mean")) {
+		cout << "Please specify the path to image mean" << endl;
+		//exit(1);
+	} else {
+		mean_path = options.get<string>("mean");
+	}
+
 	DataShape input_shape = {227, 227, 3};
 	initNetParams(input_shape);
 	initModel(model_path);
 	init_opencl();
 	allocateHostBuffer();
 	allocateDeviceBuffer();
-	//TODO: Init image
-	runApplication();
+	if(mode.compare("sample") == 0) {
+		// Sample test mode
+		cout << img_path << endl;
+		/*input_img = cv::imread(img_path, CV_LOAD_IMAGE_COLOR);
+		if( ! input_img.data) {
+			cout << "Failed to read the image. Specify correct image path" << endl;
+			return -1;
+		}
+		cout << "Image resolution :" << input_img.cols << "x" << input_img.rows << "x" << input_img.channels() << endl;
+
+		img_mean = cv::imread(mean_path, CV_LOAD_IMAGE_COLOR);
+		if( ! img_mean.data) {
+			cout << "Failed to read the mean image. Specify correct image path" << endl;
+			return -1;
+		}*/
+		// This will normalize the image and transfer to the device memory
+		//initInputImage(input_img, (DTYPE *)img_mean.data, h_input_img);
+		int test = 1;
+		if(test) {
+			testhook();
+		} else {
+			// Main application run
+			pred_label = runApplication();
+			cout << "Predicted label = " << pred_label << endl;
+		}
+	} else {
+		cout << "Full test mode" << endl;
+		std::cout << "Not implemented" << std::endl;
+		exit(1);
+		/*std::ifstream list;
+		std::vector<std::string> test_list;
+		std::vector<unsigned int> target_labels;
+		std::string csv_line, img_file, label;
+
+		list.open(list_file.c_str());
+		while(std::getline(list, csv_line)) {
+			std::stringstream ss(csv_line);
+			std::getline(ss, img_file, ',');
+			std::getline(ss, label, ',');
+			test_list.push_back(img_file);
+			target_labels.push_back(atoi(label.c_str()));
+		}
+		unsigned int testset_size = target_labels.size();
+		if(no_samples < 0 || no_samples > testset_size) {
+			no_samples = testset_size;
+		}
+		cout << "No of samples under test = " << no_samples << endl;
+		img_mean = cv::imread(mean_path, CV_LOAD_IMAGE_COLOR);
+		if( ! img_mean.data) {
+			cout << "Failed to read the mean image. Specify correct image path" << endl;
+			return -1;
+		}
+		unsigned int mis_count = 0;	
+		for(int img = 0; img < no_samples; img++) {
+			img_file = img_dir + "/" + test_list[img];
+			cout << img_file << endl;
+			// This will normalize the image and transfer to the device memory
+			initInputImage(input_img, img_mean, h_input_img);
+			// Main application run
+			pred_label = runApplication();
+			cout << "Actual = " << target_labels[img] << "Pred = " << pred_label << endl;
+			if(pred_label != target_labels[img]) {
+				mis_count++;
+			}
+		}
+		cout << "No images misclassified = " << mis_count << endl;
+		cout << "Classification Error = " << float(mis_count)/no_samples << endl;*/
+	}
 	cleanup();
 	return 0;
+}
+
+// Test all layers in isolation for runtime measurement
+void testhook() {
+	testConvLayer(conv1, "conv1");
+	testConvLayer(conv2_1, "conv2_1");
+	testConvLayer(conv2_2, "conv2_2");
+	testConvLayer(conv3, "conv3");
+	testConvLayer(conv4_1, "conv4_1");
+	testConvLayer(conv4_2, "conv4_2");
+	testConvLayer(conv5_1, "conv5_1");
+	testConvLayer(conv5_2, "conv5_2");
+
+	testPoolLayer(pool1, "pool1");
+	testPoolLayer(pool2, "pool2");
+	testPoolLayer(pool5, "pool5");
+	testNormLayer(norm1, "norm1");
+	testNormLayer(norm2, "norm2");
+	testFcLayer(fc6, "fc6");
+	testFcLayer(fc7, "fc7");
+	testFcLayer(fc8, "fc8");
+	testSoftmaxLayer(smax, "Softmax");
 }
 
 void clubNormParams(BatchNormLayer &norm, cnpy::NpyArray &beta,
@@ -353,6 +487,84 @@ unsigned int runApplication() {
 	cout << "Done---------------" << endl;
 	return 0;
 }
+
+// Isolated layer profiling
+void testConvLayer(ConvLayer &conv, std::string name) {
+	cl_int status;
+	size_t global_work_size[3];
+	size_t local_work_size[3];
+	const double start_time = getCurrentTimestamp();
+
+	setKernelArgs(conv, kernel[0], conv.d_input, global_work_size);
+	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, NULL);
+	checkError(status, "Failed to launch conv kernel");
+	clFinish(queue);
+	const double end_time = getCurrentTimestamp();
+	const double total_time = (end_time - start_time)*1000;
+	std::cout << name + " Layer Runtime(ms) = " << total_time << std::endl;
+}
+
+void testPoolLayer(PoolLayer &pool, std::string name) {
+	cl_int status;
+	size_t global_work_size[3];
+	size_t local_work_size[3];
+	const double start_time = getCurrentTimestamp();
+	setKernelArgs(pool, kernel[1], global_work_size);
+	status = clEnqueueNDRangeKernel(queue, kernel[1], 3, NULL, global_work_size, NULL, 0, NULL, NULL);
+	checkError(status, "Failed to launch pool kernel");
+	clFinish(queue);
+	const double end_time = getCurrentTimestamp();
+	const double total_time = (end_time - start_time)*1000;
+	std::cout << name + " Layer Runtime(ms) = " << total_time << std::endl;
+}
+
+void testNormLayer(BatchNormLayer &norm, std::string name) {
+	cl_int status;
+	size_t global_work_size[3];
+	size_t local_work_size[3];
+	const double start_time = getCurrentTimestamp();
+	setKernelArgs(norm, kernel[3], global_work_size);
+	status = clEnqueueNDRangeKernel(queue, kernel[3], 3, NULL, global_work_size, NULL, 0, NULL, NULL);
+	checkError(status, "Failed to launch norm1 kernel");
+	clFinish(queue);
+	const double end_time = getCurrentTimestamp();
+	const double total_time = (end_time - start_time)*1000;
+	std::cout << name + " Layer Runtime(ms) = " << total_time << std::endl;
+}
+
+void testFcLayer(FcLayer &fc, std::string name) {
+	cl_int status;
+	size_t global_work_size[3];
+	size_t local_work_size[3];
+	const double start_time = getCurrentTimestamp();
+	unsigned char act_en = 1;
+	setKernelArgs(fc, kernel[2], &act_en, global_work_size);
+	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 0, NULL, NULL);
+	checkError(status, "Failed to launch fc6 kernel");
+	clFinish(queue);
+	const double end_time = getCurrentTimestamp();
+	const double total_time = (end_time - start_time)*1000;
+	std::cout << name + " Layer Runtime(ms) = " << total_time << std::endl;
+}
+
+void testSoftmaxLayer(ActLayer &act, std::string name) {
+	cl_int status;
+	size_t global_work_size[3];
+	size_t local_work_size[3];
+	const double start_time = getCurrentTimestamp();
+	setKernelArgs(smax, kernel[4], global_work_size);
+	local_work_size[0] = global_work_size[0];
+	local_work_size[1] = global_work_size[1];
+	local_work_size[2] = global_work_size[2];
+	status = clEnqueueNDRangeKernel(queue, kernel[4], 3, NULL, global_work_size, local_work_size, 0, NULL, NULL);
+	checkError(status, "Failed to launch smax kernel");
+	clFinish(queue);
+	const double end_time = getCurrentTimestamp();
+	const double total_time = (end_time - start_time)*1000;
+	std::cout << name + " Layer Runtime(ms) = " << total_time << std::endl;
+	
+}
+// Network parameter initialization
 void initNetParams(DataShape &input_shape) {
 	cout << "CNN model initialization\n";
 	conv1.bot_shape = &input_shape; conv1.K = 11; conv1.pad = 0;

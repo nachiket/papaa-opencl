@@ -65,7 +65,7 @@ LIB_DIRS := /home/user/workspace/libs
 # Files
 INCS := $(wildcard host/inc/*.h)
 SRCS := $(wildcard host/src/*.cpp ../common/src/AOCLUtils/*.cpp)
-LIBS := rt opencv_core opencv_highgui cnpy
+LIBS := rt opencv_core opencv_highgui opencv_imgproc cnpy
 
 # Make it all!
 all : $(TARGET_DIR)/$(TARGET)
@@ -81,9 +81,9 @@ $(TARGET_DIR)/$(TARGET) : Makefile $(SRCS) $(INCS) $(TARGET_DIR)
 $(TARGET_DIR) :
 	$(ECHO)mkdir $(TARGET_DIR)
 emu: $(TARGET_DIR)/$(TARGET)
-	CL_CONTEXT_EMULATOR_DEVICE_ALTERA=1 $(TARGET_DIR)/$(TARGET) -model=../../../models/alexnet_full_precision_iter_140112.npz
+	CL_CONTEXT_EMULATOR_DEVICE_ALTERA=1 $(TARGET_DIR)/$(TARGET) -model=../../../models/alexnet_full_precision_iter_140112.npz -mode=sample
 run: $(TARGET_DIR)/$(TARGET)
-	$(TARGET_DIR)/$(TARGET) -model=../../../models/alexnet_full_precision_iter_140112.npz
+	$(TARGET_DIR)/$(TARGET) -model=../../../models/alexnet_full_precision_iter_140112.npz -mode=sample
 # Standard make targets
 clean :
 	$(ECHO)rm -f $(TARGET_DIR)/$(TARGET)

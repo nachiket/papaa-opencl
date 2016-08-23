@@ -32,6 +32,7 @@ __kernel void conv_3d_relu(
 	float4 sum4 = 0.0;
 	float zero = 0.0;
 	float sum = 0.0;
+	#pragma unroll 2
 	for(unsigned int map = 0; map < no_inputs; map++) {
 		#pragma unroll 3
 		for(unsigned int r = 0; r < K; r++) {
@@ -100,7 +101,7 @@ __kernel void fc_layer_relu(
 	const int idxstart = x*nInputs;
 	float sum = 0;
 	float zero = 0;
-	#pragma unroll 8
+	#pragma unroll 32
 	for (int i = 0; i <nInputs; i++) 
 	{
 		sum += pWeights[idxstart+i]*pInput[i];
