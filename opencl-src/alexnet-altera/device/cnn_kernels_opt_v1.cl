@@ -1,8 +1,4 @@
-#define FC_MAX_WG_SIZE	(256)
-
-//FIXME: If taking trained model from Lasagne, the conv filters flipped by default.
-//Either perform flip here OR disable flip during training !!!
-// 3D convolution + ReLU activation kernel
+//__attribute__((num_compute_units(2))) // This fails to fit on DE5
 __kernel void conv_3d_relu(
 	const __global float * restrict p_maps,
 	const __global float * restrict p_weights,
@@ -25,6 +21,8 @@ __kernel void conv_3d_relu(
 	// Same assumptions holds good for kernel dimensions as well.
 	int wstart = x * stride;
 	int hstart = y * stride;
+	int wend = wstart + K;
+	int hend = hstart + K;
 
 	const int filter_start = z * K * K * no_inputs;
 	int F = (int)K;
@@ -34,7 +32,7 @@ __kernel void conv_3d_relu(
 	float sum = 0.0;
 	#pragma unroll 2
 	for(unsigned int map = 0; map < no_inputs; map++) {
-		#pragma unroll 2
+		#pragma unroll 3
 		for(unsigned int r = 0; r < K; r++) {
 			const int fstart = filter_start + map * K * K + r * K;
 			const int map_start = ((map * in_height) + hstart + r) * in_width + wstart;
@@ -58,6 +56,82 @@ __kernel void conv_3d_relu(
 	sum = sum4.x + sum4.y + sum4.z + sum4.w + p_bias[z];
 	p_output[((z*out_height) + y) * out_width + x] = fmax(zero, sum);
 }
+//FIXME: If taking trained model from Lasagne, the conv filters flipped by default.
+//Either perform flip here OR disable flip during training !!!
+// 3D convolution + ReLU activation kernel
+//__attribute__((max_work_group_size(256, 256, 1)))
+/*__kernel void conv_3d_relu(
+	const __global float * restrict p_maps,
+	const __global float * restrict p_weights,
+	const __global float * restrict p_bias,
+	__global float * restrict p_output,
+	const unsigned int K,
+	const unsigned int stride,
+	const unsigned int no_inputs,
+	const unsigned int no_outputs) {
+
+	// FIXME: local wg size must be equal to global qork group size for this to be functionally correct.
+	const int x = get_local_id(0); 
+	const int y = get_local_id(1);
+//	const int z = get_global_id(2);
+	
+	const int out_width  = get_local_size(0);
+	const int out_height = get_local_size(1);
+	const int in_width = out_width + K - 1;
+	const int in_height = out_height + K - 1;
+
+	// Assume horizontal and vertical strides are same. Generally this is the case.
+	// Same assumptions holds good for kernel dimensions as well.
+	int wstart = x * stride;
+	int hstart = y * stride;
+	int total_work_items = out_width*out_height;
+	__local float local_filter[9216];
+	int no_weights = no_inputs * K * K;
+	int weights_per_item = no_weights/total_work_items;
+	int rem_weights = no_weights - weights_per_item * total_work_items;
+
+	for(int z = 0; z < no_outputs; z++) {
+		const int filter_start = z * no_weights;
+		// copy weights to local buffer
+		for(int w = 0 ; w < weights_per_item; w++) {
+			local_filter[w*total_work_items + y*out_width + x] = p_weights[filter_start + w*total_work_items + y*out_width + x];
+		}
+		if(y*out_width + x < rem_weights) {
+			local_filter[weights_per_item*total_work_items + y*out_width + x] = p_weights[filter_start + weights_per_item*total_work_items + y*out_width + x];
+		}
+		barrier(CLK_LOCAL_MEM_FENCE);
+		int F = (int)K;
+		float pix, w;
+		float4 sum4 = 0.0;
+		float zero = 0.0;
+		float sum = 0.0;
+		#pragma unroll 2
+		for(unsigned int map = 0; map < no_inputs; map++) {
+			#pragma unroll 2
+			for(unsigned int r = 0; r < K; r++) {
+				const int fstart = map * K * K + r * K;
+				const int map_start = ((map * in_height) + hstart + r) * in_width + wstart;
+				int c = 0;
+				int c4 = 0;
+				// vector ops
+				while(c <= F-4) {
+					float4 filter4 = vload4(c4, local_filter + fstart);
+					float4 data4 = vload4(c4, p_maps + map_start);
+					sum4 += filter4 * data4;
+					c += 4;
+					c4++;
+				}
+				// remaining columns
+				for(int c1 = c; c1 < K; c1++) {
+					sum4.x += local_filter[fstart + c1] * p_maps[map_start + c1];
+				}
+
+			}
+		}
+		sum = sum4.x + sum4.y + sum4.z + sum4.w + p_bias[z];
+		p_output[((z*out_height) + y) * out_width + x] = fmax(zero, sum);
+	}
+}*/
 __kernel void maxpool_3d(
 	const __global float * restrict pInput,
 	__global float * restrict pOutput,
@@ -87,9 +161,11 @@ __kernel void maxpool_3d(
         pOutput[(((z*oHeight)+y)*oWidth)+x] = maxval;
 }
 
-
+#define USE_LOCAL_MEM
 // Perceptron layer + conditional ReLU activation
-__attribute__((max_work_group_size(256)))
+//__attribute__((max_work_group_size(256)))
+__attribute__((num_simd_work_items(4)))
+__attribute__((reqd_work_group_size(8,1,1)))
 __kernel void fc_layer_relu(
 	const __global float * restrict pInput,
 	const __global float * restrict pWeights,
@@ -100,12 +176,13 @@ __kernel void fc_layer_relu(
 
 	// Local RAM to share the input across local work items.
 	// The input to fc6 has size = 9216 and all following layers have lesses size than this.
-	__local float local_input[256*6*6];
 	const int gx = get_global_id(0);
-	const int lx = get_local_id(0);
-	const int ls = get_local_size(0);
 
 	// Transfer input vector to local memory
+#ifdef USE_LOCAL_MEM
+	const int lx = get_local_id(0);
+	const int ls = get_local_size(0);
+	__local float local_input[256*6*6];
 	int inputs_per_item = nInputs/ls;
 	int rem_inputs = nInputs - inputs_per_item * ls;
 	for(int item = 0; item < inputs_per_item; item++) {
@@ -116,13 +193,18 @@ __kernel void fc_layer_relu(
 		local_input[ls*inputs_per_item + lx] = pInput[ls*inputs_per_item + lx];
 	}
 	barrier(CLK_LOCAL_MEM_FENCE);
+#endif
 	const int idxstart = gx*nInputs;
 	float sum = 0;
 	float zero = 0;
 	#pragma 32
 	for (int i = 0; i <nInputs; i++) 
 	{
+#ifdef USE_LOCAL_MEM
 		sum += pWeights[idxstart+i]*local_input[i];
+#else
+		sum += pWeights[idxstart+i]*pInput[i];
+#endif
 	}
 	sum += pBias[gx];
 	if(act == 1) {

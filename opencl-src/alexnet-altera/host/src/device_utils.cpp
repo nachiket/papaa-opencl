@@ -20,6 +20,8 @@ void setKernelArgs(const ConvLayer &conv, const cl_kernel &kernel, const cl_mem 
 	status = clSetKernelArg(kernel, argi++, sizeof(unsigned int), &conv.bot_shape->z);
 	checkError(status, "Failed to set argument %d", argi - 1);	
 
+	//status = clSetKernelArg(kernel, argi++, sizeof(unsigned int), &conv.top_shape.z);
+	//checkError(status, "Failed to set argument %d", argi - 1);	
     global_ws[0] = conv.top_shape.x;
     global_ws[1] = conv.top_shape.y;
     global_ws[2] = conv.top_shape.z;

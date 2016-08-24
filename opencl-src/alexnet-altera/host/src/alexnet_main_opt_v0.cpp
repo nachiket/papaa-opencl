@@ -220,20 +220,20 @@ int main(int argc, char **argv) {
 
 // Test all layers in isolation for runtime measurement
 void testhook() {
-	testConvLayer(conv1, "conv1");
+	/*testConvLayer(conv1, "conv1");
 	testConvLayer(conv2_1, "conv2_1");
 	testConvLayer(conv2_2, "conv2_2");
 	testConvLayer(conv3, "conv3");
 	testConvLayer(conv4_1, "conv4_1");
 	testConvLayer(conv4_2, "conv4_2");
 	testConvLayer(conv5_1, "conv5_1");
-	testConvLayer(conv5_2, "conv5_2");
+	testConvLayer(conv5_2, "conv5_2");*/
 
-	testPoolLayer(pool1, "pool1");
+	/*testPoolLayer(pool1, "pool1");
 	testPoolLayer(pool2, "pool2");
 	testPoolLayer(pool5, "pool5");
 	testNormLayer(norm1, "norm1");
-	testNormLayer(norm2, "norm2");
+	testNormLayer(norm2, "norm2");*/
 	testFcLayer(fc6, "fc6");
 	testFcLayer(fc7, "fc7");
 	testFcLayer(fc8, "fc8");
@@ -458,14 +458,16 @@ unsigned int runApplication() {
 	// fc6
 	unsigned char act_en = 1;
 	setKernelArgs(fc6, kernel[2], &act_en, global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 1, &kernel_event[12], &kernel_event[13]);
+	local_work_size[0] = 8;
+	status = clEnqueueNDRangeKernel(queue, kernel[2], 1, NULL, &global_work_size[0], &local_work_size[0], 1, &kernel_event[12], &kernel_event[13]);
 	checkError(status, "Failed to launch fc6 kernel");
 	setKernelArgs(fc7, kernel[2], &act_en, global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 1, &kernel_event[13], &kernel_event[14]);
+	status = clEnqueueNDRangeKernel(queue, kernel[2], 1, NULL, &global_work_size[0], &local_work_size[0], 1, &kernel_event[13], &kernel_event[14]);
 	checkError(status, "Failed to launch fc7 kernel");
 	act_en = 0;
+	local_work_size[0] = 8;
 	setKernelArgs(fc8, kernel[2], &act_en, global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 1, &kernel_event[14], &kernel_event[15]);
+	status = clEnqueueNDRangeKernel(queue, kernel[2], 1, NULL, &global_work_size[0], &local_work_size[0], 1, &kernel_event[14], &kernel_event[15]);
 	checkError(status, "Failed to launch fc8 kernel");
 
 	setKernelArgs(smax, kernel[4], global_work_size);
@@ -496,6 +498,9 @@ void testConvLayer(ConvLayer &conv, std::string name) {
 	const double start_time = getCurrentTimestamp();
 
 	setKernelArgs(conv, kernel[0], conv.d_input, global_work_size);
+	/*local_work_size[0] = conv.top_shape.x;
+	local_work_size[1] = conv.top_shape.y;
+	local_work_size[2] = conv.top_shape.z;*/
 	status = clEnqueueNDRangeKernel(queue, kernel[0], 3, NULL, global_work_size, NULL, 0, NULL, NULL);
 	checkError(status, "Failed to launch conv kernel");
 	clFinish(queue);
@@ -538,8 +543,11 @@ void testFcLayer(FcLayer &fc, std::string name) {
 	size_t local_work_size[3];
 	const double start_time = getCurrentTimestamp();
 	unsigned char act_en = 1;
+	local_work_size[0] = 8;
+	local_work_size[1] = 1;
+	local_work_size[2] = 1;
 	setKernelArgs(fc, kernel[2], &act_en, global_work_size);
-	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, NULL, 0, NULL, NULL);
+	status = clEnqueueNDRangeKernel(queue, kernel[2], 3, NULL, global_work_size, local_work_size, 0, NULL, NULL);
 	checkError(status, "Failed to launch fc6 kernel");
 	clFinish(queue);
 	const double end_time = getCurrentTimestamp();
@@ -778,7 +786,7 @@ bool init_opencl() {
 	context = clCreateContext(NULL, num_devices, &target_device, &oclContextCallback, NULL, &status);
 	checkError(status, "Failed to create context");
 	
-	std::string binary_file = getBoardBinaryFile("cnn_kernels_opt_v0", target_device);
+	std::string binary_file = getBoardBinaryFile("cnn_kernels_opt_v1", target_device);
 	printf("Using AOCX: %s\n", binary_file.c_str());
 	program = createProgramFromBinary(context, binary_file.c_str(), &target_device, num_devices);
 	// Build the program that was just created.
