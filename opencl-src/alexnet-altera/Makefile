@@ -64,7 +64,8 @@ LIB_DIRS := /home/user/workspace/libs
 
 # Files
 INCS := $(wildcard host/inc/*.h)
-SRCS := $(wildcard host/src/*.cpp ../common/src/AOCLUtils/*.cpp)
+include source.mk
+SRCS += $(wildcard ../common/src/AOCLUtils/*.cpp)
 LIBS := rt opencv_core opencv_highgui opencv_imgproc cnpy
 
 # Make it all!

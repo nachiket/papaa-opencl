@@ -161,9 +161,11 @@ __kernel void maxpool_3d(
         pOutput[(((z*oHeight)+y)*oWidth)+x] = maxval;
 }
 
+#define SINGLE_ITEM_FC
 #define USE_LOCAL_MEM
 // Perceptron layer + conditional ReLU activation
 //__attribute__((max_work_group_size(256)))
+#ifndef SINGLE_ITEM_FC
 __attribute__((num_simd_work_items(4)))
 __attribute__((reqd_work_group_size(8,1,1)))
 __kernel void fc_layer_relu(
@@ -213,6 +215,34 @@ __kernel void fc_layer_relu(
 		pOutput[gx] = sum;
 	}
 }
+#else // SINGLE_ITEM_FC
+// Single work item Perceptron layer + conditional ReLU activation implementation
+__kernel void fc_layer_relu(
+	const __global float * restrict pInput,
+	const __global float * restrict pWeights,
+	__global float * restrict pOutput,
+	const int nInputs,
+	const int nOutputs,
+	const __global float * restrict pBias,
+	const unsigned char act) {
+
+	float sum;
+	float zero = 0;
+	for(int out = 0; out < nOutputs; out++) {
+		sum = 0;
+		for (int i = 0; i <nInputs; i++) 
+		{
+			sum += pWeights[out*nInputs+i]*pInput[i];
+		}
+		sum += pBias[out];
+		if(act == 1) {
+			pOutput[out] = fmax(zero, sum);
+		} else {
+			pOutput[out] = sum;
+		}
+	}
+}
+#endif // SINGLE_ITEM_FC
 
 // Need to do piecewise linear approximation for exp(x)
 // Just implementing exp here. Normalizing probalities to be carried out on the host.
