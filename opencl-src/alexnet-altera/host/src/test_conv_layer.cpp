@@ -4,6 +4,8 @@
 #include "AOCLUtils/aocl_utils.h"
 #include "cnn_structs.h"
 
+#define BLOCK_SIZE 	16
+
 cl_platform_id platform = NULL;
 unsigned num_devices = 0;
 scoped_array<cl_device_id> devices;
@@ -23,8 +25,8 @@ int main(int argc, char **argv) {
 	size_t global_ws[3];
 	size_t local_ws[3];
 	init_opencl();
-	conv.bot_shape = &input_shape; conv.K = 11; conv.pad = 0;
-	conv.W = NULL;	conv.b = NULL;	conv.stride = 4; conv.top_shape.z = 96;
+	conv.bot_shape = &input_shape; conv.K = 3; conv.pad = 1;
+	conv.W = NULL;	conv.b = NULL;	conv.stride = 1; conv.top_shape.z = 1;
 	conv.top_shape.x = (conv.bot_shape->x - conv.K + 1 + 2*conv.pad + conv.stride-1)/conv.stride;
 	conv.top_shape.y = (conv.bot_shape->y - conv.K + 1 + 2*conv.pad + conv.stride-1)/conv.stride;
 
@@ -53,7 +55,15 @@ int main(int argc, char **argv) {
 	checkError(status, "Failed to set argument %d", argi - 1);
 	status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &conv.d_output);
 	checkError(status, "Failed to set argument %d", argi - 1);
-		
+
+	int W = conv.bot_shape->x + 2*conv.pad;
+	int H = conv.bot_shape->y + 2*conv.pad;
+	status = clSetKernelArg(kernel, argi++, sizeof(int), &conv.bot_shape->z);
+	checkError(status, "Failed to set argument %d", argi - 1);
+	status = clSetKernelArg(kernel, argi++, sizeof(int), &H);
+	checkError(status, "Failed to set argument %d", argi - 1);
+	status = clSetKernelArg(kernel, argi++, sizeof(int), &W);
+	checkError(status, "Failed to set argument %d", argi - 1);
 	/*status = clSetKernelArg(kernel, argi++, sizeof(int), &conv.K);
 	checkError(status, "Failed to set argument %d", argi - 1);	
 	status = clSetKernelArg(kernel, argi++, sizeof(int), &conv.stride);
@@ -72,17 +82,17 @@ int main(int argc, char **argv) {
 	checkError(status, "Failed to set argument %d", argi - 1);	
 	status = clSetKernelArg(kernel, argi++, sizeof(int), &conv.top_shape.x);
 	checkError(status, "Failed to set argument %d", argi - 1);	*/
-    global_ws[0] = 1;//conv.top_shape.x;
-    global_ws[1] = 1;//conv.top_shape.y;
-    global_ws[2] = 1;//conv.top_shape.z;
+    global_ws[0] = conv.top_shape.x;
+    global_ws[1] = conv.top_shape.y;
+    global_ws[2] = conv.top_shape.z;
 
-	local_ws[0] = 1;//global_ws[0];
-	local_ws[1] = 1;//global_ws[1];
+	local_ws[0] = BLOCK_SIZE;//global_ws[0];
+	local_ws[1] = BLOCK_SIZE;//global_ws[1];
 	local_ws[2] = 1;
 	cl_event event;
 	std::cout << "Starting execution" << std::endl;
 	const double start_time = getCurrentTimestamp();
-	status = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, global_ws, local_ws, 0, NULL, &event);
+	status = clEnqueueNDRangeKernel(queue, kernel, 3, NULL, global_ws, local_ws, 0, NULL, &event);
 	checkError(status, "Failed to launch conv kernel");
 	clFinish(queue);
 	cl_ulong start, end;
@@ -125,7 +135,7 @@ bool init_opencl() {
 	context = clCreateContext(NULL, num_devices, &target_device, &oclContextCallback, NULL, &status);
 	checkError(status, "Failed to create context");
 	
-	std::string binary_file = getBoardBinaryFile("conv_kernel", target_device);
+	std::string binary_file = getBoardBinaryFile("block_conv_kernel", target_device);
 	printf("Using AOCX: %s\n", binary_file.c_str());
 	program = createProgramFromBinary(context, binary_file.c_str(), &target_device, num_devices);
 	// Build the program that was just created.
@@ -138,7 +148,7 @@ bool init_opencl() {
 	checkError(status, "Failed to create command queue");
 	
 	// Kernel.
-	kernel = clCreateKernel(program, "conv_3d_relu", &status);
+	kernel = clCreateKernel(program, "block_3d_conv", &status);
 	checkError(status, "Failed to create kernel");
 	std::cout << "OpenCL init done" << std::endl;
 	return true;

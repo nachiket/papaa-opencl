@@ -1,5 +1,9 @@
-#if 0
-__kernel void conv_3d_relu(
+#if 1
+
+__kernel
+__attribute((reqd_work_group_size(4, 4, 4)))
+__attribute((num_simd_work_items(4)))
+void conv_3d_relu(
 	const __global float * restrict p_maps,
 	const __global float * restrict p_weights,
 	const __global float * restrict p_bias,
@@ -56,6 +60,8 @@ __kernel void conv_3d_relu(
 	sum = sum4.x + sum4.y + sum4.z + sum4.w + p_bias[z];
 	p_output[((z*out_height) + y) * out_width + x] = fmax(zero, sum);
 }
+#endif
+#if 0
 __attribute__((reqd_work_group_size(1,1, 32)))
 __kernel void conv_3d_relu(
 	const __global float * restrict p_maps,
@@ -241,7 +247,7 @@ __kernel void conv_3d_relu(
 }
 #endif
 
-#if 1
+#if 0
 #define NO_INPUT	256
 #define NO_OUTPUT	384
 #define K			3
