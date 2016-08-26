@@ -18,7 +18,7 @@ ConvLayer conv;
 bool init_opencl();
 
 int main(int argc, char **argv) {
-	DataShape input_shape = {227, 227, 3};
+	DataShape input_shape = {256, 256, 3};
 	cl_int status;
 	size_t global_ws[3];
 	size_t local_ws[3];
@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
 	status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &conv.d_output);
 	checkError(status, "Failed to set argument %d", argi - 1);
 		
-	status = clSetKernelArg(kernel, argi++, sizeof(int), &conv.K);
+	/*status = clSetKernelArg(kernel, argi++, sizeof(int), &conv.K);
 	checkError(status, "Failed to set argument %d", argi - 1);	
 	status = clSetKernelArg(kernel, argi++, sizeof(int), &conv.stride);
 	checkError(status, "Failed to set argument %d", argi - 1);	
@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
 	status = clSetKernelArg(kernel, argi++, sizeof(int), &conv.top_shape.y);
 	checkError(status, "Failed to set argument %d", argi - 1);	
 	status = clSetKernelArg(kernel, argi++, sizeof(int), &conv.top_shape.x);
-	checkError(status, "Failed to set argument %d", argi - 1);	
+	checkError(status, "Failed to set argument %d", argi - 1);	*/
     global_ws[0] = 1;//conv.top_shape.x;
     global_ws[1] = 1;//conv.top_shape.y;
     global_ws[2] = 1;//conv.top_shape.z;
@@ -79,11 +79,19 @@ int main(int argc, char **argv) {
 	local_ws[0] = 1;//global_ws[0];
 	local_ws[1] = 1;//global_ws[1];
 	local_ws[2] = 1;
+	cl_event event;
 	std::cout << "Starting execution" << std::endl;
 	const double start_time = getCurrentTimestamp();
-	status = clEnqueueNDRangeKernel(queue, kernel, 3, NULL, global_ws, local_ws, 0, NULL, NULL);
+	status = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, global_ws, local_ws, 0, NULL, &event);
 	checkError(status, "Failed to launch conv kernel");
 	clFinish(queue);
+	cl_ulong start, end;
+	status  = clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+	status |= clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+	checkError(status, "Error: could not get profile information");
+	clReleaseEvent(event);
+
+	std::cout << "Kernel time:" << (end-start) << std::endl;
 	const double end_time = getCurrentTimestamp();
 	const double total_time = (end_time - start_time)*1000;
 	std::cout << "Conv Layer Runtime(ms) = " << total_time << std::endl;
