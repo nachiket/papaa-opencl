@@ -5,6 +5,7 @@
 #include "cnn_structs.h"
 
 #define BLOCK_SIZE 	16
+#define NO_LOCAL_OUTPUT_MAPS 8
 
 cl_platform_id platform = NULL;
 unsigned num_devices = 0;
@@ -20,13 +21,13 @@ ConvLayer conv;
 bool init_opencl();
 
 int main(int argc, char **argv) {
-	DataShape input_shape = {256, 256, 3};
+	DataShape input_shape = {16, 16, 192};
 	cl_int status;
 	size_t global_ws[3];
 	size_t local_ws[3];
 	init_opencl();
 	conv.bot_shape = &input_shape; conv.K = 3; conv.pad = 1;
-	conv.W = NULL;	conv.b = NULL;	conv.stride = 1; conv.top_shape.z = 1;
+	conv.W = NULL;	conv.b = NULL;	conv.stride = 1; conv.top_shape.z = 128;
 	conv.top_shape.x = (conv.bot_shape->x - conv.K + 1 + 2*conv.pad + conv.stride-1)/conv.stride;
 	conv.top_shape.y = (conv.bot_shape->y - conv.K + 1 + 2*conv.pad + conv.stride-1)/conv.stride;
 
@@ -88,7 +89,7 @@ int main(int argc, char **argv) {
 
 	local_ws[0] = BLOCK_SIZE;//global_ws[0];
 	local_ws[1] = BLOCK_SIZE;//global_ws[1];
-	local_ws[2] = 1;
+	local_ws[2] = NO_LOCAL_OUTPUT_MAPS;
 	cl_event event;
 	std::cout << "Starting execution" << std::endl;
 	const double start_time = getCurrentTimestamp();
