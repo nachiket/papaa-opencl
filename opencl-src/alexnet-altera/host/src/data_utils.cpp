@@ -2,18 +2,6 @@
 #include <iostream>
 #include "opencv2/imgproc/imgproc.hpp"
 
-template<typename T>
-void showMat(T buff, int n_ch, int h, int w, int to_show=3) {
-	for(unsigned int ch = 0; ch < to_show; ch++) {
-		std::cout << "Channel: " << ch << std::endl;
-		for(unsigned int r = 0; r < h; r++) {
-			for(unsigned int c = 0; c < w; c++) {
-				std::cout << buff[ch*h*w+r*w+c] << ",";
-			}
-			std::cout << std::endl;
-		}
-	} 
-}
 
 void cropImage(const cv::Mat &img, cv::Mat &crop_img, unsigned int H, unsigned int W, CROP_TYPE_E type) {
 		switch(type) {
