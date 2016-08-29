@@ -1,5 +1,5 @@
 #define BLOCK_SIZE	16
-#define MAX_KERNEL_SIZE	11
+#define MAX_KERNEL_SIZE	3
 #define K 3
 
 /* Single work item kernel is giving max of 1600MB/s BW. and was taking ~16% of the total logic utilization
@@ -121,8 +121,10 @@ void block_3d_conv(
 	int no_inputs, int H, int W) {
 
 	// local storage for one block of one input map. Extra rows and columns for padding area.
+	//__local float __attribute((memory, numbanks(8), bankwidth(64), doublepump))
 	__local float map_blk[BLOCK_SIZE + MAX_KERNEL_SIZE - 1][BLOCK_SIZE + MAX_KERNEL_SIZE - 1];
 	// local buffer for weights corresponding to 1 input map. One KxK kernel for each output map
+	//__local float __attribute((memory, numbanks(8), bankwidth(64), doublepump))
 	__local float map_ker[NO_LOCAL_OUTPUT_MAPS][MAX_KERNEL_SIZE*MAX_KERNEL_SIZE];
 
 	// output block index of a block of a set of output map
@@ -134,8 +136,13 @@ void block_3d_conv(
 	int local_x = get_local_id(0);
 	int local_y = get_local_id(1);
 	int local_z = get_local_id(2);
+
+	int gx = get_global_id(0);
+	int gy = get_global_id(1);
+	int gsx = get_global_size(0);
+	int gsy = get_global_size(1);
 	// current output map
-	int out_map = block_z * NO_LOCAL_OUTPUT_MAPS + local_z;
+	int out_map = (block_z * NO_LOCAL_OUTPUT_MAPS + local_z) & 0x1FF;
 
 	// bias unit for this output map which is common to all work items
 	__local float local_bias[NO_LOCAL_OUTPUT_MAPS];
@@ -161,7 +168,7 @@ void block_3d_conv(
    		local_bias[local_z] = p_bias[out_map];
 	}
 
-	for(int imap = 0; imap < no_inputs; imap++) {
+	for(uint imap = 0; imap < (no_inputs & 0x1FF); imap++) {
 		// pointer to this input map in global memory
 		global float *p_imap = p_maps + imap * H * W;
 
@@ -171,8 +178,8 @@ void block_3d_conv(
 		if(copy_row) {
 			// copy extra row assigned to this work item
 			#pragma unroll
-			for(int p = 0; p < BLOCK_SIZE + K - 1; p++) {
-				map_blk[row_idx][p] = p_imap[row_start + row_idx * W + col_start + p];
+			for(uint p = 0; p < BLOCK_SIZE + K - 1; p++) {
+				map_blk[row_idx][p] = p_imap[row_start & 0xFF + row_idx * W + col_start & 0xFF + p];
 			}
 		}
 
@@ -196,6 +203,6 @@ void block_3d_conv(
 	}
 	// add bias unit and write back
 	sum += local_bias[local_z];
-	p_output[(out_map * get_global_size(1) + get_global_id(1)) * get_global_size(0) + get_global_id(0)] = fmax(zero, sum);
+	p_output[(out_map * gsy + gy) * gsx + gx] = fmax(zero, sum);
 }
 
