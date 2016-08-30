@@ -13,7 +13,7 @@
 		} \
 
 #define BLOCK_SIZE 	16
-#define NO_LOCAL_OUTPUT_MAPS 8
+#define NO_LOCAL_OUTPUT_MAPS 16
 
 cl_platform_id platform = NULL;
 unsigned num_devices = 0;

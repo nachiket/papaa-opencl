@@ -111,7 +111,7 @@ void block_3d_conv(
  * a group of output maps make better reuse of the data. Hence the required work group size is extended to z dimension.
  */
 #if 1
-#define NO_LOCAL_OUTPUT_MAPS	8
+#define NO_LOCAL_OUTPUT_MAPS	16
 __kernel
 __attribute((reqd_work_group_size(BLOCK_SIZE, BLOCK_SIZE, NO_LOCAL_OUTPUT_MAPS)))
 __attribute((num_simd_work_items(4)))
