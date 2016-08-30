@@ -6,13 +6,7 @@
 #include "cnn_structs.h"
 #include "data_utils.h"
 
-#define CHECK_NEAR(val1, val2) \
-		if(abs(val1 - val2) > 1e-6){ \
-			std::cout << "Mismatch" << std::endl;\
-		} \
-
-#define BLOCK_SIZE 	16
-#define NO_LOCAL_OUTPUT_MAPS 16
+#define BLOCK_SIZE 64
 
 cl_platform_id platform = NULL;
 unsigned num_devices = 0;
@@ -25,71 +19,111 @@ cl_kernel kernel;
 
 ConvLayer conv;
 aocl_utils::scoped_aligned_ptr<DTYPE> ref_output;
+aocl_utils::scoped_aligned_ptr<DTYPE> data_mat;
+WTYPE * weight_mat;
+
 
 bool init_opencl();
 void compute_reference();
 void compare();
 
 int main(int argc, char **argv) {
-	DataShape input_shape = {256, 256, 3};
+	DataShape input_shape = {227, 227, 3};
 	cl_int status;
-	size_t global_ws[3];
-	size_t local_ws[3];
-	init_opencl();
-	conv.bot_shape = &input_shape; conv.K = 3; conv.pad = 1;
-	conv.W = NULL;	conv.b = NULL;	conv.stride = 1; conv.top_shape.z = 96;
-	conv.top_shape.x = (conv.bot_shape->x - conv.K + 1 + 2*conv.pad + conv.stride-1)/conv.stride;
-	conv.top_shape.y = (conv.bot_shape->y - conv.K + 1 + 2*conv.pad + conv.stride-1)/conv.stride;
-	conv.W = (WTYPE *)malloc(conv.K*conv.K*conv.bot_shape->z*conv.top_shape.z*sizeof(WTYPE));
-	conv.b = (WTYPE *)malloc(conv.top_shape.z*sizeof(WTYPE));
+	size_t global_ws[2];
+	size_t local_ws[2];
+	aocl_utils::scoped_aligned_ptr<DTYPE> out_mat;
 
-	conv.h_input.reset((conv.bot_shape->x+2*conv.pad) * (conv.bot_shape->y+2*conv.pad) * conv.bot_shape->z);
+	init_opencl();
+	conv.bot_shape = &input_shape; conv.K = 11; conv.pad = 0;
+	conv.W = NULL;	conv.b = NULL;	conv.stride = 4; conv.top_shape.z = 96;
+	conv.top_shape.x = (conv.bot_shape->x - conv.K + 1 + 2 * conv.pad + conv.stride-1) / conv.stride;
+	conv.top_shape.y = (conv.bot_shape->y - conv.K + 1 + 2 * conv.pad + conv.stride-1) / conv.stride;
+
+	int dmat_cols = conv.K * conv.K * conv.bot_shape->z;
+	int dmat_rows = conv.top_shape.x * conv.top_shape.y;
+	int &wmat_rows = dmat_cols;
+	int wmat_cols = conv.top_shape.z;
+
+	// make dimensions multiple of BLOCK_SIZE
+	int extra_dmat_rows = BLOCK_SIZE - dmat_rows % BLOCK_SIZE;
+	int extra_dmat_cols = BLOCK_SIZE - dmat_cols % BLOCK_SIZE;
+	int extra_wmat_cols = BLOCK_SIZE - wmat_cols % BLOCK_SIZE;
+	int M = dmat_rows + extra_dmat_rows;
+	int N = dmat_cols + extra_dmat_cols;
+	int P = wmat_cols + extra_wmat_cols;
+
+	conv.W = (WTYPE *)malloc(conv.K * conv.K * conv.bot_shape->z * conv.top_shape.z * sizeof(WTYPE));
+	conv.b = (WTYPE *)malloc(P * sizeof(WTYPE));
+
+	conv.h_input.reset((conv.bot_shape->x + 2 * conv.pad) * (conv.bot_shape->y + 2 * conv.pad) * conv.bot_shape->z);
 	conv.h_output.reset(conv.top_shape.x * conv.top_shape.y * conv.top_shape.z);
 	ref_output.reset(conv.top_shape.x * conv.top_shape.y * conv.top_shape.z);
+
 	// random input init
-	rand_init(conv.h_input, (conv.bot_shape->x+2*conv.pad) * (conv.bot_shape->y+2*conv.pad) * conv.bot_shape->z, 0);
-	rand_init(conv.W, conv.K*conv.K*conv.bot_shape->z*conv.top_shape.z, 123);
+	rand_init(conv.h_input, (conv.bot_shape->x + 2 * conv.pad) * (conv.bot_shape->y + 2 * conv.pad) * conv.bot_shape->z, 0);
+	rand_init(conv.W, conv.K * conv.K * conv.bot_shape->z * conv.top_shape.z, 123);
 	rand_init(conv.b, conv.top_shape.z, 321);
 
+
+	std::cout << "Input shape = " << "(" << conv.bot_shape->z << "," << conv.bot_shape->y <<","<< conv.bot_shape->x << ")" << std::endl;
+	std::cout << "Output shape = " << "(" << conv.top_shape.z << "," << conv.top_shape.y <<","<< conv.top_shape.x << ")" << std::endl;
+	/*showMat<aocl_utils::scoped_aligned_ptr<DTYPE>& >(conv.h_input, conv.bot_shape->z,
+		conv.bot_shape->y + 2*conv.pad, conv.bot_shape->x + 2*conv.pad, 2);*/
+
+	//showMat<WTYPE * >(conv.W, conv.bot_shape->z, conv.K, conv.K, 4);
+
+
+	std::cout << "Data mat dim = " << M << "x" << N << std::endl;
+	std::cout << "Weight mat dim = " << N << "x" << P << std::endl;
+
+	weight_mat = (WTYPE *)malloc((wmat_rows + extra_dmat_cols) * (wmat_cols + extra_wmat_cols) * sizeof(WTYPE));
+	data_mat.reset((dmat_rows + extra_dmat_rows) * (dmat_cols + extra_dmat_cols));
+	out_mat.reset(M * P);
+
+	// image to matrix conversion
+	img2col(conv.h_input, data_mat, conv.bot_shape->z, conv.bot_shape->y + 2*conv.pad,
+		conv.bot_shape->x + 2 * conv.pad, conv.K, conv.stride, 0, extra_dmat_rows, extra_dmat_cols);
+	weight2col(conv.W, weight_mat, conv.bot_shape->z, conv.K, conv.top_shape.z, extra_dmat_cols, extra_wmat_cols);
+	
+	//showMat<aocl_utils::scoped_aligned_ptr<DTYPE>& >(data_mat, 1, M, N, 1);
+	//showMat<WTYPE* >(weight_mat, 1, N, P, 1);
+
 	conv.d_input = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_1_ALTERA | CL_MEM_COPY_HOST_PTR,
-                (conv.bot_shape->x+2*conv.pad) * (conv.bot_shape->y+2*conv.pad) * conv.bot_shape->z * sizeof(DTYPE), conv.h_input, &status);
+                 M * N * sizeof(DTYPE), data_mat, &status);
 	conv.d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_2_ALTERA, 
-		conv.top_shape.x * conv.top_shape.y  * conv.top_shape.z * sizeof(DTYPE), NULL, &status);
+		M * P * sizeof(DTYPE), NULL, &status);
 	
 	conv.d_W = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_BANK_2_ALTERA | CL_MEM_COPY_HOST_PTR, 
-		conv.K * conv.K * conv.bot_shape->z * conv.top_shape.z * sizeof(WTYPE), conv.W, &status);
+		N * P * sizeof(WTYPE), weight_mat, &status);
 	conv.d_b = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_BANK_2_ALTERA | CL_MEM_COPY_HOST_PTR, 
-		conv.top_shape.z * sizeof(WTYPE), conv.b, &status);
+		P * sizeof(WTYPE), conv.b, &status);
 	
 	unsigned argi = 0;
+	status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &conv.d_output);
+	checkError(status, "Failed to set argument %d", argi - 1);	
 	status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &conv.d_input);
 	checkError(status, "Failed to set argument %d", argi - 1);	
 	status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &conv.d_W);
-	checkError(status, "Failed to set argument %d", argi - 1);	
+	checkError(status, "Failed to set argument %d", argi - 1);
 	status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &conv.d_b);
 	checkError(status, "Failed to set argument %d", argi - 1);
-	status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &conv.d_output);
+	status = clSetKernelArg(kernel, argi++, sizeof(int), &N);
 	checkError(status, "Failed to set argument %d", argi - 1);
 
-	int W = conv.bot_shape->x + 2*conv.pad;
-	int H = conv.bot_shape->y + 2*conv.pad;
-	status = clSetKernelArg(kernel, argi++, sizeof(int), &conv.bot_shape->z);
+	status = clSetKernelArg(kernel, argi++, sizeof(int), &P);
 	checkError(status, "Failed to set argument %d", argi - 1);
-	status = clSetKernelArg(kernel, argi++, sizeof(int), &H);
-	checkError(status, "Failed to set argument %d", argi - 1);
-	status = clSetKernelArg(kernel, argi++, sizeof(int), &W);
-	checkError(status, "Failed to set argument %d", argi - 1);
-    global_ws[0] = conv.top_shape.x;
-    global_ws[1] = conv.top_shape.y;
-    global_ws[2] = conv.top_shape.z;
 
-	local_ws[0] = BLOCK_SIZE;//global_ws[0];
-	local_ws[1] = BLOCK_SIZE;//global_ws[1];
-	local_ws[2] = NO_LOCAL_OUTPUT_MAPS;
+    global_ws[0] = P;
+    global_ws[1] = M;
+
+	local_ws[0] = BLOCK_SIZE;
+	local_ws[1] = BLOCK_SIZE;
+
 	cl_event event;
 	std::cout << "Starting execution" << std::endl;
 	const double start_time = getCurrentTimestamp();
-	status = clEnqueueNDRangeKernel(queue, kernel, 3, NULL, global_ws, local_ws, 0, NULL, &event);
+	status = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_ws, local_ws, 0, NULL, &event);
 	checkError(status, "Failed to launch conv kernel");
 	clFinish(queue);
 	cl_ulong start, end;
@@ -104,14 +138,19 @@ int main(int argc, char **argv) {
 	std::cout << "Conv Layer Runtime(ms) = " << total_time << std::endl;
 	
 	status = clEnqueueReadBuffer(queue, conv.d_output, CL_TRUE, 0,
-		conv.top_shape.x * conv.top_shape.y * conv.top_shape.z * sizeof(DTYPE), conv.h_output, 0, NULL, NULL);
+		M * P * sizeof(DTYPE), out_mat, 0, NULL, NULL);
 	checkError(status, "Failed to read data from the device");
 	clFinish(queue);
-	std::cout << "Computing reference output" << std::endl;
+	//showMat<aocl_utils::scoped_aligned_ptr<DTYPE>& >(out_mat, 1, M, P, 1);
+
+	col2img(out_mat, conv.h_output, conv.top_shape.z, conv.top_shape.y, conv.top_shape.x, extra_wmat_cols);
+	//showMat<aocl_utils::scoped_aligned_ptr<DTYPE>& >(conv.h_output, conv.top_shape.z, conv.top_shape.y, conv.top_shape.x, 2);
+
 	// compute reference output and compare
-	//showMat<aocl_utils::scoped_aligned_ptr<DTYPE>& >(conv.h_output, conv.top_shape.z, conv.top_shape.y, conv.top_shape.x, 1);
+	std::cout << "Computing reference output" << std::endl;
 	compute_reference();
-	//showMat<aocl_utils::scoped_aligned_ptr<DTYPE>& >(ref_output, conv.top_shape.z, conv.top_shape.y, conv.top_shape.x, 1);
+	//showMat<aocl_utils::scoped_aligned_ptr<DTYPE>& >(ref_output, conv.top_shape.z, conv.top_shape.y, conv.top_shape.x, 2);
+
 	std::cout << "Comparing" << std::endl;
 	compare();
 
@@ -146,7 +185,7 @@ bool init_opencl() {
 	context = clCreateContext(NULL, num_devices, &target_device, &oclContextCallback, NULL, &status);
 	checkError(status, "Failed to create context");
 	
-	std::string binary_file = getBoardBinaryFile("block_conv_kernel", target_device);
+	std::string binary_file = getBoardBinaryFile("matrix_mult", target_device);
 	printf("Using AOCX: %s\n", binary_file.c_str());
 	program = createProgramFromBinary(context, binary_file.c_str(), &target_device, num_devices);
 	// Build the program that was just created.
@@ -159,7 +198,7 @@ bool init_opencl() {
 	checkError(status, "Failed to create command queue");
 	
 	// Kernel.
-	kernel = clCreateKernel(program, "block_3d_conv", &status);
+	kernel = clCreateKernel(program, "matrixMult", &status);
 	checkError(status, "Failed to create kernel");
 	std::cout << "OpenCL init done" << std::endl;
 	return true;
@@ -185,6 +224,8 @@ void compute_reference() {
 				}
 				sum += conv.b[omap];
 				ref_output[(omap * conv.top_shape.y + row) * conv.top_shape.x + col] = std::max(zero, sum); 
+				//ref_output[(omap * conv.top_shape.y + row) * conv.top_shape.x + col] = sum; 
+
 			}	
 		}
 	}
@@ -227,4 +268,5 @@ void cleanup() {
 	clReleaseMemObject(conv.d_b);
 	free(conv.W);
 	free(conv.b);
+	free(weight_mat);
 }

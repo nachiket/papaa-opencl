@@ -25,6 +25,7 @@
 # See http://www.altera.com/literature/hb/opencl-sdk/aocl_getting_started.pdf 
 # for more information on installing and configuring the Altera SDK for OpenCL.
 VERBOSE:=1
+DEBUG:=1
 ifeq ($(VERBOSE),1)
 ECHO := 
 else

@@ -1,4 +1,5 @@
 //__attribute__((num_compute_units(2))) // This fails to fit on DE5
+#if 0
 __kernel void conv_3d_relu(
 	const __global float * restrict p_maps,
 	const __global float * restrict p_weights,
@@ -56,6 +57,7 @@ __kernel void conv_3d_relu(
 	sum = sum4.x + sum4.y + sum4.z + sum4.w + p_bias[z];
 	p_output[((z*out_height) + y) * out_width + x] = fmax(zero, sum);
 }
+#endif
 //FIXME: If taking trained model from Lasagne, the conv filters flipped by default.
 //Either perform flip here OR disable flip during training !!!
 // 3D convolution + ReLU activation kernel
