@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
 
 	local_ws[0] = BLOCK_SIZE;//global_ws[0];
 	local_ws[1] = BLOCK_SIZE;//global_ws[1];
-	local_ws[2] = 1;//NO_LOCAL_OUTPUT_MAPS;
+	local_ws[2] = NO_LOCAL_OUTPUT_MAPS;
 	cl_event event;
 	std::cout << "Starting execution" << std::endl;
 	const double start_time = getCurrentTimestamp();

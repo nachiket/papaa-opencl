@@ -1,5 +1,6 @@
 //FIXME: If taking trained model from Lasagne, the conv filters flipped by default.
 //Either perform flip here OR disable flip during training !!!
+#if 0
 __kernel void conv_3d(
 	const __global float *p_maps,
 	const __global float *p_weights,
@@ -39,6 +40,7 @@ __kernel void conv_3d(
 	}
 	p_output[((z*out_height) + y) * out_width + x] = sum + p_bias[z];
 }
+#endif
 
 __kernel void maxpool3D(
         const __global float * pInput,
