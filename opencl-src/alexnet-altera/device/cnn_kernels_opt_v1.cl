@@ -162,7 +162,6 @@ __kernel void maxpool_3d(
 	}
         pOutput[(((z*oHeight)+y)*oWidth)+x] = maxval;
 }
-#if 0
 #define SINGLE_ITEM_FC
 #define USE_LOCAL_MEM
 // Perceptron layer + conditional ReLU activation
@@ -245,49 +244,7 @@ __kernel void fc_layer_relu(
 	}
 }
 #endif // SINGLE_ITEM_FC
-#endif
 
-#define FC_WG_SIZE			(256)			// compute 1024 outputs for last layer and discard 24 of them
-#define FC_SIMD_ITEMS		(4)
-#define FC_MAX_INPUT_SIZE	(256 * 8 * 8)	// nearest power of 2
-__kernel
-__attribute__((num_simd_work_items(FC_SIMD_ITEMS)))
-__attribute__((reqd_work_group_size(FC_WG_SIZE,1,1)))
-void fc_layer_relu(
-	const __global float * restrict p_input,
-	const __global float * restrict p_weights,
-	__global float * restrict p_output,
-	const int no_inputs,
-	const __global float * restrict p_bias,
-	const unsigned char act) {
-
-	// TODO: partition into FC_SIMD_ITEMS banks so that they can have parallel access.
-	// One read and one write port is enough
-	__local float input_buff[FC_MAX_INPUT_SIZE];
-
-	int block_x = get_group_id(0);
-	int local_x = get_local_id(0);
-	int global_x = get_global_id(0);
-	// copy inputs
-	// FIXME: This assumes that no_inputs % FC_WG_SIZE = 0
-	for(int in = 0; in < no_inputs; in += FC_WG_SIZE) {
-		input_buff[in + local_x] = p_input[in + local_x];
-	}
-	barrier(CLK_LOCAL_MEM_FENCE);
-
-	int w_start = no_inputs * global_x;
-	float sum = 0.0f;
-	float zero = 0.0f;
-
-	for(int i = 0; i < no_inputs; i++) {
-		sum += p_weights[w_start + i] * input_buff[i];
-	}
-	sum += p_bias[global_x];
-	if(act) {
-		sum = fmax(zero, sum);
-	}
-	p_output[global_x] = sum;
-}
 
 // Need to do piecewise linear approximation for exp(x)
 // Just implementing exp here. Normalizing probalities to be carried out on the host.
