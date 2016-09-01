@@ -31,13 +31,13 @@ void compute_reference();
 void compare();
 
 int main(int argc, char **argv) {
-	DataShape input_shape = {256, 256, 3};
+	DataShape input_shape = {16, 16, 256};
 	cl_int status;
 	size_t global_ws[3];
 	size_t local_ws[3];
 	init_opencl();
 	conv.bot_shape = &input_shape; conv.K = 3; conv.pad = 1;
-	conv.W = NULL;	conv.b = NULL;	conv.stride = 1; conv.top_shape.z = 96;
+	conv.W = NULL;	conv.b = NULL;	conv.stride = 1; conv.top_shape.z = 384;
 	conv.top_shape.x = (conv.bot_shape->x - conv.K + 1 + 2*conv.pad + conv.stride-1)/conv.stride;
 	conv.top_shape.y = (conv.bot_shape->y - conv.K + 1 + 2*conv.pad + conv.stride-1)/conv.stride;
 	conv.W = (WTYPE *)malloc(conv.K*conv.K*conv.bot_shape->z*conv.top_shape.z*sizeof(WTYPE));
@@ -70,7 +70,6 @@ int main(int argc, char **argv) {
 	checkError(status, "Failed to set argument %d", argi - 1);
 	status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &conv.d_output);
 	checkError(status, "Failed to set argument %d", argi - 1);
-
 	int W = conv.bot_shape->x + 2*conv.pad;
 	int H = conv.bot_shape->y + 2*conv.pad;
 	status = clSetKernelArg(kernel, argi++, sizeof(int), &conv.bot_shape->z);
@@ -78,6 +77,9 @@ int main(int argc, char **argv) {
 	status = clSetKernelArg(kernel, argi++, sizeof(int), &H);
 	checkError(status, "Failed to set argument %d", argi - 1);
 	status = clSetKernelArg(kernel, argi++, sizeof(int), &W);
+	checkError(status, "Failed to set argument %d", argi - 1);
+	// For the case where the filter size is a variable in the kernel
+	status = clSetKernelArg(kernel, argi++, sizeof(int), &conv.K);
 	checkError(status, "Failed to set argument %d", argi - 1);
     global_ws[0] = conv.top_shape.x;
     global_ws[1] = conv.top_shape.y;

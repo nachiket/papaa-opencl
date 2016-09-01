@@ -1,6 +1,6 @@
 #define BLOCK_SIZE	16
-#define MAX_KERNEL_SIZE	3
-#define K 3
+#define MAX_KERNEL_SIZE	11
+//#define K 3
 
 /* Single work item kernel is giving max of 1600MB/s BW. and was taking ~16% of the total logic utilization
  * Now trying with 4 work items
@@ -120,7 +120,7 @@ void block_3d_conv(
 	__global float * restrict p_weights,
 	__global float * restrict p_bias,
 	__global float * restrict p_output,
-	int no_inputs, int H, int W) {
+	int no_inputs, int H, int W, int ker_size) {
 
 	// local storage for one block of one input map. Extra rows and columns for padding area.
 	//__local float __attribute((memory, numbanks(8), bankwidth(64), doublepump))
@@ -143,6 +143,7 @@ void block_3d_conv(
 	int gy = get_global_id(1);
 	int gsx = get_global_size(0);
 	int gsy = get_global_size(1);
+	int K = ker_size & 0xF;
 	// current output map
 	int out_map = get_global_id(2) & 0x1FF;		// we are not going to have more than 512 maps
 
@@ -177,7 +178,7 @@ void block_3d_conv(
 		//
 		// copy 1 column of the input map block with K-1 extra rows
 		if(copy_col) {
-			#pragma unroll
+			#pragma unroll 18
 			for(uint p = 0; p < BLOCK_SIZE + K - 1; p++) {
 				//map_blk[p][col_idx] = p_imap[row_start + row_idx * W + col_start + p];
 				map_blk[p][col_idx] = p_imap[row_start + p*W + col_start + col_idx];
@@ -192,9 +193,9 @@ void block_3d_conv(
 		barrier(CLK_LOCAL_MEM_FENCE);
 
 		// compute
-		#pragma unroll
+		#pragma unroll 3
 		for(int kr = 0; kr < K; kr++) {
-			#pragma unroll
+			#pragma unroll 3
 			for(int kc = 0; kc < K; kc++) {
 				sum += map_ker[local_z][kr][kc] * map_blk[local_y + kr][local_x + kc];
 			}

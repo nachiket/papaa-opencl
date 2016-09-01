@@ -162,7 +162,7 @@ __kernel void maxpool_3d(
 	}
         pOutput[(((z*oHeight)+y)*oWidth)+x] = maxval;
 }
-#define SINGLE_ITEM_FC
+//#define SINGLE_ITEM_FC
 #define USE_LOCAL_MEM
 // Perceptron layer + conditional ReLU activation
 //__attribute__((max_work_group_size(256)))
