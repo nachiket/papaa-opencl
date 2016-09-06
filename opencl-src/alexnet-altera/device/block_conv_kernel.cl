@@ -110,8 +110,8 @@ void block_3d_conv(
  * corresponding to 1 map. However, the input data is common across all output maps. In this kernel, the input map block is shared between
  * a group of output maps make better reuse of the data. Hence the required work group size is extended to z dimension.
  */
-#if 1
-#define NO_LOCAL_OUTPUT_MAPS	16
+#if 0
+#define NO_LOCAL_OUTPUT_MAPS	8
 __kernel
 __attribute((reqd_work_group_size(BLOCK_SIZE, BLOCK_SIZE, NO_LOCAL_OUTPUT_MAPS)))
 __attribute((num_simd_work_items(4)))
@@ -128,10 +128,13 @@ void block_3d_conv(
 
 	// local storage for one block of one input map. Extra rows and columns for padding area.
 	//__local float __attribute((memory, numbanks(8), bankwidth(64), doublepump))
-	__local float map_blk[2*BLOCK_SIZE][2*BLOCK_SIZE];
+	 __local float __attribute__((numbanks(8), bankwidth(4))) map_blk[2*BLOCK_SIZE][2*BLOCK_SIZE];
+	//__local float map_blk[2*BLOCK_SIZE][2*BLOCK_SIZE];
 	// local buffer for weights corresponding to 1 input map. One KxK kernel for each output map
 	//__local float __attribute((memory, numbanks(8), bankwidth(64), doublepump))
-	__local float map_ker[NO_LOCAL_OUTPUT_MAPS][BLOCK_SIZE][BLOCK_SIZE];
+	__local float __attribute__((numbanks(8), bankwidth(4))) map_ker[NO_LOCAL_OUTPUT_MAPS][BLOCK_SIZE/2][BLOCK_SIZE/2];
+	//__local float map_ker[NO_LOCAL_OUTPUT_MAPS][BLOCK_SIZE][BLOCK_SIZE];
+	//__local float map_ker[NO_LOCAL_OUTPUT_MAPS][BLOCK_SIZE];
 
 	// output block index of a block of a set of output map
 	int block_x = get_group_id(0);
@@ -161,21 +164,23 @@ void block_3d_conv(
 	float sum = 0.0f;
 	float zero = 0.0f;
 	
-	int filter_start = out_map * K * K * no_inputs;
+	//int filter_start = out_map * K * K * no_inputs;
 	// set a flag if this work item is entitled to copy a weight coefficient.
 	const bool copy_ker = ((local_x < K) && (local_y < K));
 	// Let the work items in the center of the block in each plane copy the bias
 	// as the workload on these items is less.
-	//const bool copy_bias = ((local_x == BLOCK_SIZE/2) && (local_y == BLOCK_SIZE/2));
-	const bool copy_bias = (local_x == 0 && local_y == 0);
+	const bool copy_bias = ((local_x == BLOCK_SIZE/2) && (local_y == BLOCK_SIZE/2));
+	//const bool copy_bias = (local_x == 0 && local_y == 0);
 	// first few work items in z=0 plane will copy 1 column on the block
 	const bool copy_col = (local_z == 0 && (local_y * BLOCK_SIZE + local_x) < (BLOCK_SIZE + K - 1));
 	int col_idx = local_y * BLOCK_SIZE + local_x;
 	if(copy_bias) {
 		local_bias[local_z] = p_bias[out_map];
 	}
+	//async_work_group_copy(local_bias, p_bias, NO_LOCAL_OUTPUT_MAPS, 0);
 
 	for(uint imap = 0; imap < no_inputs; imap++) {
+		//event_t events[2];
 		// pointer to this input map in global memory
 		global float *p_imap = p_maps + imap * H * W;
 		if(copy_col) {
@@ -185,12 +190,19 @@ void block_3d_conv(
 				map_blk[p][col_idx] = p_imap[row_start + p*W + col_start + col_idx];
 			}
 		}
-
+		/*for(int br = 0; br < BLOCK_SIZE+K-1; br++) {
+			events[0] = async_work_group_copy(map_blk[br], p_imap + row_start + br*W + col_start,  BLOCK_SIZE + K - 1, 0);
+		}*/
 		// copy kernel for input map
+		int filter_start = out_map * K * K * no_inputs;
 		if(copy_ker) {
 			map_ker[local_z][local_y][local_x] = p_weights[filter_start + (imap * K + local_y) * K + local_x];
 		}
-
+		/*int omap_ker = block_z * NO_LOCAL_OUTPUT_MAPS;
+		for(int mk = 0; mk < NO_LOCAL_OUTPUT_MAPS; mk++) {
+			events[1] = async_work_group_copy(map_ker[mk], p_weights + (omap_ker + mk) * K * K * no_inputs + imap * K * K, K*K, 0);
+		}
+	 	wait_group_events(2, events);*/
 		barrier(CLK_LOCAL_MEM_FENCE);
 
 		// compute
@@ -215,6 +227,94 @@ void block_3d_conv(
 }
 #endif
 
+/*
+ * This implementation reads input maps of 4 times the block size to evenly distrubute the read among all work items.
+ * - cache is not implemented for input maps.
+ * - map_blk is implemented with 32 banks. 18 reads 16 writes
+ * - 84ms for conv3, map read burst size = 5, BW of DDR bank1(map read and write) 11650MB/s with 42% efficiency
+ * - max stall 30.8%, 35% read occupancy
+ */
+#if 1
+#define NO_LOCAL_OUTPUT_MAPS	1
+__kernel
+__attribute((reqd_work_group_size(BLOCK_SIZE, BLOCK_SIZE, NO_LOCAL_OUTPUT_MAPS)))
+__attribute((num_simd_work_items(4)))
+void block_3d_conv(
+	__global float * restrict p_maps
+	, __global float * restrict p_weights
+	, __global float * restrict p_bias
+	, __global float * restrict p_output
+	, int no_inputs
+	, int H
+	, int W
+	) {
+
+	// local storage for one block of one input map. Extra rows and columns for padding area.
+	//__local float __attribute((memory, numbanks(8), bankwidth(64), doublepump))
+	// __local float __attribute__((numbanks(8), bankwidth(4))) map_blk[2*BLOCK_SIZE][2*BLOCK_SIZE];
+	__local float map_blk[2*BLOCK_SIZE][2*BLOCK_SIZE];
+	// local buffer for weights corresponding to 1 input map. One KxK kernel for each output map
+	//__local float __attribute((memory, numbanks(8), bankwidth(64), doublepump))
+	//__local float __attribute__((numbanks(8), bankwidth(4))) map_ker[NO_LOCAL_OUTPUT_MAPS][BLOCK_SIZE/2][BLOCK_SIZE/2];
+	__local float map_ker[BLOCK_SIZE][BLOCK_SIZE];
+
+	// output block index of a block of a set of output map
+	int block_x = get_group_id(0);
+	int block_y = get_group_id(1);
+
+	// output map pixel offset within block
+	int local_x = get_local_id(0);
+	int local_y = get_local_id(1);
+
+	int gx = get_global_id(0);
+	int gy = get_global_id(1);
+	int gsx = get_global_size(0);
+	int gsy = get_global_size(1);
+//	int K = ker_size & 0xF;
+	// current output map
+	int out_map = get_global_id(2) & 0x1FF;		// we are not going to have more than 512 maps
+
+
+	// block start location in each input map
+	int row_start = block_y * BLOCK_SIZE * W;
+	int col_start = block_x * BLOCK_SIZE;
+
+	float sum = 0.0f;
+	float zero = 0.0f;
+	
+	const bool copy_ker = ((local_x < K) && (local_y < K));
+
+	for(uint imap = 0; imap < no_inputs; imap++) {
+		// pointer to this input map in global memory
+		global float * cur_ptr = p_maps + imap * H * W +  row_start + (2*local_y + (local_x >> 3)) * W + col_start;
+		map_blk[2*local_y + (local_x >> 3)][4*(local_x % 8) + 0] = cur_ptr[4*(local_x % 8) + 0];
+		map_blk[2*local_y + (local_x >> 3)][4*(local_x % 8) + 1] = cur_ptr[4*(local_x % 8) + 1];
+		map_blk[2*local_y + (local_x >> 3)][4*(local_x % 8) + 2] = cur_ptr[4*(local_x % 8) + 2];
+		map_blk[2*local_y + (local_x >> 3)][4*(local_x % 8) + 3] = cur_ptr[4*(local_x % 8) + 3];
+		// copy kernel for input map
+		int filter_start = out_map * K * K * no_inputs;
+		if(copy_ker) {
+			map_ker[local_y][local_x] = p_weights[filter_start + (imap * K + local_y) * K + local_x];
+		}
+		barrier(CLK_LOCAL_MEM_FENCE);
+
+		// compute
+		#pragma unroll
+		for(int kr = 0; kr < K; kr++) {
+			#pragma unroll
+			for(int kc = 0; kc < K; kc++) {
+				sum += map_ker[kr][kc] * map_blk[local_y + kr][local_x + kc];
+			}
+		}
+
+		// wait for all work items to finish before overwriting local buffer.
+		barrier(CLK_LOCAL_MEM_FENCE);
+	}
+	// add bias unit and write back
+	sum += p_bias[out_map];
+	p_output[(out_map * gsy + gy) * gsx + gx] = fmax(zero, sum);
+}
+#endif
 /*
  * conv3: 37ms
  * weight read 440MB/s, input read 18.6MB/s, 183.5MHz
