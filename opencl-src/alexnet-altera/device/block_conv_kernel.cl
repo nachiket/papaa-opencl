@@ -235,7 +235,7 @@ void block_3d_conv(
  * - max stall 30.8%, 35% read occupancy
  */
 #if 1
-#define NO_LOCAL_OUTPUT_MAPS	1
+#define NO_LOCAL_OUTPUT_MAPS	8
 __kernel
 __attribute((reqd_work_group_size(BLOCK_SIZE, BLOCK_SIZE, NO_LOCAL_OUTPUT_MAPS)))
 __attribute((num_simd_work_items(4)))
@@ -252,28 +252,29 @@ void block_3d_conv(
 	// local storage for one block of one input map. Extra rows and columns for padding area.
 	//__local float __attribute((memory, numbanks(8), bankwidth(64), doublepump))
 	// __local float __attribute__((numbanks(8), bankwidth(4))) map_blk[2*BLOCK_SIZE][2*BLOCK_SIZE];
-	__local float map_blk[2*BLOCK_SIZE][2*BLOCK_SIZE];
+	__local float map_blk[NO_LOCAL_OUTPUT_MAPS][2*BLOCK_SIZE][2*BLOCK_SIZE];
 	// local buffer for weights corresponding to 1 input map. One KxK kernel for each output map
 	//__local float __attribute((memory, numbanks(8), bankwidth(64), doublepump))
 	//__local float __attribute__((numbanks(8), bankwidth(4))) map_ker[NO_LOCAL_OUTPUT_MAPS][BLOCK_SIZE/2][BLOCK_SIZE/2];
-	__local float map_ker[BLOCK_SIZE][BLOCK_SIZE];
+	__local float map_ker[NO_LOCAL_OUTPUT_MAPS][NO_LOCAL_OUTPUT_MAPS][BLOCK_SIZE][BLOCK_SIZE];
 
 	// output block index of a block of a set of output map
 	int block_x = get_group_id(0);
 	int block_y = get_group_id(1);
+	int block_z = get_group_id(2);
 
 	// output map pixel offset within block
 	int local_x = get_local_id(0);
 	int local_y = get_local_id(1);
+	int local_z = get_local_id(2);
 
 	int gx = get_global_id(0);
 	int gy = get_global_id(1);
 	int gsx = get_global_size(0);
 	int gsy = get_global_size(1);
-//	int K = ker_size & 0xF;
+
 	// current output map
 	int out_map = get_global_id(2) & 0x1FF;		// we are not going to have more than 512 maps
-
 
 	// block start location in each input map
 	int row_start = block_y * BLOCK_SIZE * W;
@@ -283,27 +284,31 @@ void block_3d_conv(
 	float zero = 0.0f;
 	
 	const bool copy_ker = ((local_x < K) && (local_y < K));
-
-	for(uint imap = 0; imap < no_inputs; imap++) {
+	// for this to be functionally correct, no of input maps must be multiple for NO_LOCAL_OUTPUT_MAPS
+	for(uint imap = 0; imap < no_inputs; imap+=NO_LOCAL_OUTPUT_MAPS) {
 		// pointer to this input map in global memory
-		global float * cur_ptr = p_maps + imap * H * W +  row_start + (2*local_y + (local_x >> 3)) * W + col_start;
-		map_blk[2*local_y + (local_x >> 3)][4*(local_x % 8) + 0] = cur_ptr[4*(local_x % 8) + 0];
-		map_blk[2*local_y + (local_x >> 3)][4*(local_x % 8) + 1] = cur_ptr[4*(local_x % 8) + 1];
-		map_blk[2*local_y + (local_x >> 3)][4*(local_x % 8) + 2] = cur_ptr[4*(local_x % 8) + 2];
-		map_blk[2*local_y + (local_x >> 3)][4*(local_x % 8) + 3] = cur_ptr[4*(local_x % 8) + 3];
-		// copy kernel for input map
-		int filter_start = out_map * K * K * no_inputs;
-		if(copy_ker) {
-			map_ker[local_y][local_x] = p_weights[filter_start + (imap * K + local_y) * K + local_x];
+		global float * cur_ptr = p_maps + (imap+local_z) * H * W +  row_start + (2*local_y + (local_x >> 3)) * W + col_start;
+		map_blk[local_z][2*local_y + (local_x >> 3)][4*(local_x % 8) + 0] = cur_ptr[4*(local_x % 8) + 0];
+		map_blk[local_z][2*local_y + (local_x >> 3)][4*(local_x % 8) + 1] = cur_ptr[4*(local_x % 8) + 1];
+		map_blk[local_z][2*local_y + (local_x >> 3)][4*(local_x % 8) + 2] = cur_ptr[4*(local_x % 8) + 2];
+		map_blk[local_z][2*local_y + (local_x >> 3)][4*(local_x % 8) + 3] = cur_ptr[4*(local_x % 8) + 3];
+		// copy kernel for NO_LOCAL_OUTPUT_MAPS input maps
+		#pragma unroll
+		for(int ker = 0; ker < NO_LOCAL_OUTPUT_MAPS; ker++) {
+			int filter_start = out_map * K * K * no_inputs + (imap+ker) * K * K;
+			if(copy_ker) {
+				map_ker[local_z][ker][local_y][local_x] = p_weights[filter_start + local_y * K + local_x];
+			}
 		}
 		barrier(CLK_LOCAL_MEM_FENCE);
-
-		// compute
-		#pragma unroll
-		for(int kr = 0; kr < K; kr++) {
+		for(int in = 0; in < NO_LOCAL_OUTPUT_MAPS; in++) {
+			// compute
 			#pragma unroll
-			for(int kc = 0; kc < K; kc++) {
-				sum += map_ker[kr][kc] * map_blk[local_y + kr][local_x + kc];
+			for(int kr = 0; kr < K; kr++) {
+				#pragma unroll
+				for(int kc = 0; kc < K; kc++) {
+					sum += map_ker[local_z][in][kr][kc] * map_blk[in][local_y + kr][local_x + kc];
+				}
 			}
 		}
 

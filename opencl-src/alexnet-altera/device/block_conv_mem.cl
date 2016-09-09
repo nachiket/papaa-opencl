@@ -53,7 +53,7 @@ void block_3d_conv(
 	
 	//int filter_start = out_map * K * K * no_inputs;
 	// set a flag if this work item is entitled to copy a weight coefficient.
-	//const bool copy_ker = ((local_x < K) && (local_y < K));
+	const bool copy_ker = ((local_x < K) && (local_y < K));
 	// Let the work items in the center of the block in each plane copy the bias
 	// as the workload on these items is less.
 	//const bool copy_bias = ((local_x == BLOCK_SIZE/2) && (local_y == BLOCK_SIZE/2));
@@ -75,13 +75,13 @@ void block_3d_conv(
 				//map_blk[p][col_idx] = p_imap[row_start + row_idx * W + col_start + p];
 				map_blk[p][col_idx] = p_imap[row_start + p*W + col_start + col_idx];
 			}
-		}
+		}*/
 		// copy kernel for input map
 		if(copy_ker) {
 			map_ker[local_z][local_y][local_x] = p_weights[filter_start + (imap * K + local_y) * K + local_x];
-		}*/
+		}
 		map_blk[local_y][local_x] = p_imap[row_start + local_y*W + col_start + local_x];
-		map_ker[local_z][local_y][local_x] =  p_weights[filter_start + (imap * K + local_y) * K + local_x];
+		//map_ker[local_z][local_y][local_x] =  p_weights[filter_start + (imap * K + local_y) * K + local_x];
 		barrier(CLK_LOCAL_MEM_FENCE);
 		p_imap[row_start + local_y * W + col_start + local_x] = map_blk[local_y][local_x];
 		p_weights[filter_start + (imap * K + local_y) * K + local_x] = map_ker[local_z][local_y][local_x];
