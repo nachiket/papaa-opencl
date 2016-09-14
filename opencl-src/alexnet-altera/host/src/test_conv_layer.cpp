@@ -12,7 +12,8 @@
 		} \
 
 #define BLOCK_SIZE 	16
-#define NO_LOCAL_OUTPUT_MAPS 16
+#define NO_LOCAL_OUTPUT_MAPS 8
+#define PIXELS_PER_WORK_ITEM (8)
 
 cl_platform_id platform = NULL;
 unsigned num_devices = 0;
@@ -31,7 +32,7 @@ void compute_reference();
 void compare();
 
 int main(int argc, char **argv) {
-	DataShape input_shape = {16, 16, 256};
+	DataShape input_shape = {14, 14, 256};
 	cl_int status;
 	size_t global_ws[3];
 	size_t local_ws[3];
@@ -53,7 +54,7 @@ int main(int argc, char **argv) {
 
 	conv.d_input = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_1_ALTERA | CL_MEM_COPY_HOST_PTR,
                 (conv.bot_shape->x+2*conv.pad) * (conv.bot_shape->y+2*conv.pad) * conv.bot_shape->z * sizeof(DTYPE), conv.h_input, &status);
-	conv.d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_2_ALTERA, 
+	conv.d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_BANK_1_ALTERA, 
 		conv.top_shape.x * conv.top_shape.y  * conv.top_shape.z * sizeof(DTYPE), NULL, &status);
 	
 	conv.d_W = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_BANK_2_ALTERA | CL_MEM_COPY_HOST_PTR, 
@@ -79,12 +80,15 @@ int main(int argc, char **argv) {
 	status = clSetKernelArg(kernel, argi++, sizeof(int), &W);
 	checkError(status, "Failed to set argument %d", argi - 1);
 	// For the case where the filter size is a variable in the kernel
-	status = clSetKernelArg(kernel, argi++, sizeof(int), &conv.K);
-	checkError(status, "Failed to set argument %d", argi - 1);
-    global_ws[0] = conv.top_shape.x;
+	//status = clSetKernelArg(kernel, argi++, sizeof(int), &conv.top_shape.z);
+	//checkError(status, "Failed to set argument %d", argi - 1);
+    /*global_ws[0] = conv.top_shape.x;
     global_ws[1] = conv.top_shape.y;
-    global_ws[2] = conv.top_shape.z;
+    global_ws[2] = conv.top_shape.z;*/
 
+    global_ws[0] = W;
+    global_ws[1] = H;
+    global_ws[2] = conv.top_shape.z;
 	local_ws[0] = BLOCK_SIZE;//global_ws[0];
 	local_ws[1] = BLOCK_SIZE;//global_ws[1];
 	local_ws[2] = NO_LOCAL_OUTPUT_MAPS;
@@ -100,8 +104,8 @@ int main(int argc, char **argv) {
 	checkError(status, "Error: could not get profile information");
 	clReleaseEvent(event);
 
-	std::cout << "Kernel time:" << (end-start) << std::endl;
 	const double end_time = getCurrentTimestamp();
+	std::cout << "Kernel time:" << (end-start) << std::endl;
 	const double total_time = (end_time - start_time)*1000;
 	std::cout << "Conv Layer Runtime(ms) = " << total_time << std::endl;
 	
@@ -109,13 +113,14 @@ int main(int argc, char **argv) {
 		conv.top_shape.x * conv.top_shape.y * conv.top_shape.z * sizeof(DTYPE), conv.h_output, 0, NULL, NULL);
 	checkError(status, "Failed to read data from the device");
 	clFinish(queue);
+	//showMat<aocl_utils::scoped_aligned_ptr<DTYPE>& >(conv.h_input, conv.bot_shape->z, conv.bot_shape->y+2*conv.pad, conv.bot_shape->x+2*conv.pad, 1);
 	std::cout << "Computing reference output" << std::endl;
 	// compute reference output and compare
 	//showMat<aocl_utils::scoped_aligned_ptr<DTYPE>& >(conv.h_output, conv.top_shape.z, conv.top_shape.y, conv.top_shape.x, 1);
 	compute_reference();
 	//showMat<aocl_utils::scoped_aligned_ptr<DTYPE>& >(ref_output, conv.top_shape.z, conv.top_shape.y, conv.top_shape.x, 1);
 	std::cout << "Comparing" << std::endl;
-	compare();
+	//compare();
 
 	cleanup();
 }
@@ -149,6 +154,7 @@ bool init_opencl() {
 	checkError(status, "Failed to create context");
 	
 	std::string binary_file = getBoardBinaryFile("block_conv_kernel", target_device);
+	//std::string binary_file = getBoardBinaryFile("block_conv_mem", target_device);
 	printf("Using AOCX: %s\n", binary_file.c_str());
 	program = createProgramFromBinary(context, binary_file.c_str(), &target_device, num_devices);
 	// Build the program that was just created.
@@ -201,6 +207,7 @@ void compare() {
 		for(unsigned row = 0; row < H; row++) {
 			for(unsigned col = 0; col < W; col++) {
 				CHECK_NEAR(ref_output[(omap * H + row)*W + col], conv.h_output[(omap * H + row)*W + col]);
+				//std::cout << omap << "," << row << "," << col << std::endl;
 				float diff = ref_output[(omap * H + row)*W + col] - conv.h_output[(omap * H + row)*W + col];
 				mse += diff * diff;
 			}
