@@ -1,7 +1,9 @@
 include sources.mk
 CC=gcc
 CFLAGS= -g -O3
-LIBS= -lOpenCL
+LIBS= OpenCL
+INC_DIRS= /usr/local/cuda-8.0/include
+LIB_DIRS= /usr/local/cuda-8.0/lib64
 
 exec=lab0_app
 
@@ -9,7 +11,9 @@ all:$(exec)
 
 $(exec):$(C_SRCS)
 	@echo Building....
-	$(CC) $(CFLAGS) $(C_SRCS) -o $(exec) $(LIBS)
+	$(CC) $(CFLAGS) $(C_SRCS) -o $(exec) \
+	$(foreach D,$(INC_DIRS),-I$D) $(foreach D,$(LIB_DIRS),-L$D) \
+	$(foreach L,$(LIBS),-l$L)
 
 run:$(exec)
 	./$(exec) ../../../imgs/mnist_test_img_0.pgm

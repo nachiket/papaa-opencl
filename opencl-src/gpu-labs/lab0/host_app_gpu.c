@@ -37,7 +37,7 @@ int main(int argc, char** argv)
 	cl_mem d_image, d_filter, d_output;
 
 	if (argc != 2) {
-		printf("Expecting 2 arguments.\n");
+		printf("Usage: %s <image_name.pgm>\n", argv[0]);
 		exit(1);
 	}
 
