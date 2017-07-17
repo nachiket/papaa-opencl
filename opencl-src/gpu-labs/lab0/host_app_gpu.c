@@ -81,8 +81,10 @@ int main(int argc, char** argv)
 	for(i=0;i<dev_cnt;i++)
 	{
 		err = clGetDeviceIDs(platform_ids[i], CL_DEVICE_TYPE_GPU, 1, &device_id, NULL);
-		if(err == CL_SUCCESS)
+		if(err == CL_SUCCESS) {
+			printf("GPU selected for acceleration!\n");
 			break;
+		}
 	}
 	if (err != CL_SUCCESS)
 	{
