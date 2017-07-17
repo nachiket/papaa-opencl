@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <OpenCL/cl.h>
-#include <OpenCL/cl_ext.h>
+#include <CL/cl.h>
+#include <CL/cl_ext.h>
 #include "pgm.h"
 
 #define FILTER_SIZE  (3)
