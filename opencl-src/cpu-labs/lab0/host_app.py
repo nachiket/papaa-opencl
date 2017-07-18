@@ -18,7 +18,7 @@ DTYPE = np.float32
 
 lap_filter = np.ones(FILTER_SIZE**2, dtype=DTYPE)*-1.
 lap_filter[4] = DTYPE(8.)
-bias = DTYPE(0.01)
+bias = DTYPE(0.05)
 
 input_pgm = Image.open(sys.argv[1])
 h_image = np.array(list(input_pgm.getdata()), dtype=DTYPE) # Row-Major flattened array
@@ -27,6 +27,21 @@ h_image_padded = np.zeros(((input_pgm.width+FILTER_SIZE-1)*(input_pgm.height+FIL
 for i in range(input_pgm.height): # for each row
     h_image_padded[i*(input_pgm.width+FILTER_SIZE-1):i*(input_pgm.width+FILTER_SIZE-1)+input_pgm.width] = h_image[i*input_pgm.width:(i+1)*input_pgm.width] 
 print("Host: Input image resolution: %dx%d" % (input_pgm.width, input_pgm.height))
+
+ref_output = np.empty_like(h_image, dtype=DTYPE)
+
+# Validation (gross c way, but don't feel like debugging right now)
+for row in range(input_pgm.height):
+    for col in range(input_pgm.width):
+        ref_output[row*(input_pgm.width) + col] = 0
+
+for row in range(input_pgm.height):
+    for col in range(input_pgm.width):
+        tmp = DTYPE(0)
+        for kr in range(FILTER_SIZE):
+            for kc in range(FILTER_SIZE):
+                tmp += DTYPE(lap_filter[kr*FILTER_SIZE + kc] * h_image_padded[(col+kr)*(input_pgm.width+FILTER_SIZE-1) + row + kc])
+        ref_output[col*(input_pgm.width) + row] = tmp + bias
 
 # Setup OpenCL
 ctx = cl.create_some_context(interactive=False)
@@ -52,22 +67,16 @@ elapsed_time = end - start
 h_output = np.empty_like(h_image, dtype=DTYPE)
 cl.enqueue_copy(queue, h_output, d_output)
 
-ref_output = np.empty_like(h_output, dtype=DTYPE)
-
-# Validation (gross c way, but don't feel like debugging right now)
-for row in range(input_pgm.height-FILTER_SIZE+1):
-    for col in range(input_pgm.width-FILTER_SIZE+1):
-        tmp = DTYPE(0)
-        for kr in range(FILTER_SIZE):
-            for kc in range(FILTER_SIZE):
-                tmp += DTYPE(lap_filter[kr*FILTER_SIZE + kc] * h_image_padded[(row+kr)*(input_pgm.width+FILTER_SIZE-1) + col + kc])
-        ref_output[row*input_pgm.width + col] = tmp + bias
-
 if np.allclose(h_output, ref_output):
     print("INFO: ****TEST PASSED****")
 else:
     print("INFO: TEST FAILED !!!!")
-    # print((h_output-ref_output).reshape((28,28)))
+    print((h_output-ref_output).reshape((28,28)))
+    print("==============")
+    print((h_output).reshape((28,28)))
+    print("==============")
+    print((ref_output).reshape((28,28)))
+    print("==============")
 
 print("Kernel runtime = %0.3f us" % (elapsed_time*1e6))
 
