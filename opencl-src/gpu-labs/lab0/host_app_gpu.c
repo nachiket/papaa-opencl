@@ -194,7 +194,7 @@ int main(int argc, char** argv)
 	err |= clSetKernelArg(kernel, 3, sizeof(int), (void *)&filter_width);
 	err |= clSetKernelArg(kernel, 4, sizeof(int), (void *)&filter_height);
 	err |= clSetKernelArg(kernel, 5, sizeof(float), (void*)&bias);
-	err |= clSetKernelArg(kernel, 6, sizeof(float)*localWorkSize[0]*(localWorkSize[1]+filter_height-1), (void*)NULL);
+	err |= clSetKernelArg(kernel, 6, sizeof(float)*(localWorkSize[0]+filter_width-1)*(localWorkSize[1]+filter_height-1), (void*)NULL);
 
 	if (err != CL_SUCCESS) {
 		printf("Error: Failed to set kernel arguments! %d\n", err);	

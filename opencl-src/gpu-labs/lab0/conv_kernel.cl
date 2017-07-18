@@ -23,10 +23,10 @@ __kernel void conv_local(
 	local_filt[x] = filt[x];
     }
 */
-    image_buff[y * ImWidth + x] = in[row * ImWidth + x];
+    image_buff[y * (ImWidth+nFilterWidth-1) + x] = in[row * (ImWidth+nFilterWidth-1) + x];
     if(y > (get_local_size(1) - nFilterHeight))
     {
-    	image_buff[(y+nFilterHeight-1)*ImWidth + x] = in[(row+nFilterHeight-1)*ImWidth + x];
+    	image_buff[(y+nFilterHeight-1)*(ImWidth+nFilterWidth-1) + x] = in[(row+nFilterHeight-1)*(ImWidth+nFilterWidth-1) + x];
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -35,7 +35,7 @@ __kernel void conv_local(
     {
         for(int c = 0; c < nFilterWidth; c++)
         {
-            sum += filt[r*nFilterWidth + c]*image_buff[(y + r) * (ImWidth+FILTER_SIZE-1) + x + c];
+            sum += filt[r*nFilterWidth + c]*image_buff[(y + r) * (ImWidth+nFilterWidth-1) + x + c];
         }
     }
     out[row * ImWidth + x] = sum + bias;
