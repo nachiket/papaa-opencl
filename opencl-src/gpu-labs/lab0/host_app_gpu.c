@@ -195,6 +195,8 @@ int main(int argc, char** argv)
 	err |= clSetKernelArg(kernel, 4, sizeof(int), (void *)&filter_height);
 	err |= clSetKernelArg(kernel, 5, sizeof(float), (void*)&bias);
 	err |= clSetKernelArg(kernel, 6, sizeof(float)*(localWorkSize[0]+filter_width-1)*(localWorkSize[1]+filter_height-1), (void*)NULL);
+	int local_buf_size = (localWorkSize[0]+filter_width-1)*(localWorkSize[1]+filter_height-1);
+	printf("local_buf_size=%d\n",local_buf_size);
 
 	if (err != CL_SUCCESS) {
 		printf("Error: Failed to set kernel arguments! %d\n", err);	
