@@ -21,14 +21,14 @@ __kernel void conv_2d(
 		int c2 = 0;
 		while (c <= K - 2) { 
 			filter2 = vload2(c2, filt + r*K);
-			in2 = vload2(c2, in + (r+y)*W+x);
+			in2 = vload2(c2, in + (r+y)*(W+K-1)+x);
 			sum2 += in2 * filter2; 
 			c += 2;
 			c2++;   
 		}
 		for(; c < K; c++)
 		{
-			sum2.x += filt[r * K + c] * in[(y + r) * W + x + c];
+			sum2.x += filt[r * K + c] * in[(y + r) * (W+K-1) + x + c];
 		}
 	}
 	out[y * W + x] = sum2.x + sum2.y + bias;

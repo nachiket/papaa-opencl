@@ -20,7 +20,7 @@ __kernel void conv_2d(
 		// loop over columns
 		for(c = 0; c < K; c++)
 		{
-			sum += filt[r * K + c] * in[(y + r) * W + x + c];
+			sum += filt[r * K + c] * in[(y + r) * (W+K-1) + x + c];
 		}
 	}
 	out[y * W + x] = sum + bias;

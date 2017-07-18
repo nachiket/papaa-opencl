@@ -22,7 +22,7 @@ __kernel void conv_2d(
 		__attribute__ ((opencl_unroll_hint))
 		for(c = 0; c < K; c++)
 		{
-			sum += filt[r * K + c] * in[(y + r) * W + x + c];
+			sum += filt[r * K + c] * in[(y + r) * (W+K-1) + x + c];
 		}
 	}
 	out[y * W + x] = sum + bias;
@@ -50,12 +50,12 @@ __kernel void __conv_2d(
 		// loop over columns
 		for(c = 0; c < (K/unroll_factor)*unroll_factor; c+=2)
 		{
-			sum += filt[r * K + c] * in[(y + r) * W + x + c];
-			sum += filt[r * K + c+1] * in[(y + r) * W + x + c+1];
+			sum += filt[r * K + c] * in[(y + r) * (W+K-1) + x + c];
+			sum += filt[r * K + c+1] * in[(y + r) * (W+K-1) + x + c+1];
 		}
 		// leftovers
 		for(; c < K; c++) {
-			sum += filt[r * K + c] * in[(y + r) * W + x + c];
+			sum += filt[r * K + c] * in[(y + r) * (W+K-1) + x + c];
 		}
 	}
 	out[y * W + x] = sum + bias;
