@@ -45,7 +45,7 @@ int main(int argc, char** argv)
 
 	printf("Input image resolution:%dx%d\n", input_pgm.width,input_pgm.height);
 
-	DTYPE  *h_image;
+	DTYPE  *h_image, *h_image_padded;
 	DTYPE  *h_filter, *h_bias, *h_output;
 
 	// Allocate host memory for matrices
@@ -53,10 +53,21 @@ int main(int argc, char** argv)
 	unsigned int mem_size_image = sizeof(DTYPE) * size_image;
 	h_image    = (DTYPE*)malloc(mem_size_image);
 	ref_output = (DTYPE*)malloc(mem_size_image);
+	
+	//setup padded input image
+	const int PADDED_SIZE = sizeof(DTYPE)*(input_pgm.width+FILTER_SIZE-1)*(input_pgm.height+FILTER_SIZE-1);
+	h_image_padded = (DTYPE*)malloc(PADDED_SIZE);
+	memset((void*)h_image_padded, 0, PADDED_SIZE); //init padded image to 0s
+	int offset = 0; //Used for padded image
 
-	for(i = 0; i < size_image; i++)
+	// Convert range from [0, 255] to [0.0, 1.0]
+	for(i = 0; i < input_pgm.width * input_pgm.height; i++)
 	{
-		h_image[i] = (DTYPE) input_pgm.buf[i]/255;
+		if(i%input_pgm.width == 0 && i>0){ //if end of image row
+			offset += FILTER_SIZE-1; //bump padded image to next row
+		}
+		h_image[i] = (DTYPE) input_pgm.buf[i]/255.0;
+		h_image_padded[i+offset] = h_image[i];
 	}
 
 	unsigned int size_filter = FILTER_SIZE*FILTER_SIZE;
@@ -151,7 +162,7 @@ int main(int argc, char** argv)
 		exit(1);
 	}
 
-	d_image  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, mem_size_image, h_image, &err);
+	d_image  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, PADDED_SIZE, h_image_padded, &err);
 
 	cl_ulong time_start, time_end;
 	double total_time;
@@ -216,12 +227,12 @@ int main(int argc, char** argv)
     // Generate reference output
     int kr, kc, row, col;
     DTYPE sum = 0;
-    for(row = 0; row < input_pgm.height-FILTER_SIZE+1; row++) {
-        for(col = 0; col < input_pgm.width-FILTER_SIZE+1; col++) {
+    for(row = 0; row < input_pgm.height; row++) {
+        for(col = 0; col < input_pgm.width; col++) {
             sum = 0;
             for(kr = 0; kr < FILTER_SIZE; kr++) {
                 for(kc = 0; kc < FILTER_SIZE; kc++ ) {
-                    sum += (lap_filter[kr*FILTER_SIZE + kc] * h_image[(row+kr)*input_pgm.width + col + kc]);
+                    sum += (lap_filter[kr*FILTER_SIZE + kc] * h_image_padded[(row+kr)*(input_pgm.width+FILTER_SIZE-1) + col + kc]);
                 }
             }
             ref_output[row*input_pgm.width + col] = sum + bias;

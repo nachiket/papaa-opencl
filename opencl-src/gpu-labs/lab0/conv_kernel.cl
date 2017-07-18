@@ -35,7 +35,7 @@ __kernel void conv_local(
     {
         for(int c = 0; c < nFilterWidth; c++)
         {
-            sum += filt[r*nFilterWidth + c]*image_buff[(y + r) * ImWidth + x + c];
+            sum += filt[r*nFilterWidth + c]*image_buff[(y + r) * (ImWidth+FILTER_SIZE-1) + x + c];
         }
     }
     out[row * ImWidth + x] = sum + bias;
