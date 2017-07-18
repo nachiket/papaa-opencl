@@ -227,8 +227,8 @@ int main(int argc, char** argv)
     }
     // Check Results
 	int test_fail = 0;
-    for(row = 0; row < input_pgm.height - FILTER_SIZE + 1; row++) {
-        for(col = 0; col < input_pgm.width - FILTER_SIZE + 1; col++) {
+    for(row = 0; row < input_pgm.height; row++) {
+        for(col = 0; col < input_pgm.width; col++) {
              if(ref_output[row*input_pgm.width+col] != h_output[row*input_pgm.width+col]){
                  printf("Mismatch at : row = %d, col = %d, expected = %f, got = %f\n",
                      row, col, ref_output[row*input_pgm.width+col], h_output[row*input_pgm.width+col]);
