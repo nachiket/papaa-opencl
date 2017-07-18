@@ -59,7 +59,7 @@ d_filter = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, lap_filter.nbytes, la
 d_output = cl.Buffer(ctx, mf.WRITE_ONLY, h_image.nbytes)
 
 globalsize = (input_pgm.width, input_pgm.height)
-localsize = (1, 1)
+localsize = (4, 4)
 
 print("Launching the Kernel...")
 k_event = prg.conv_2d(queue, globalsize, localsize,

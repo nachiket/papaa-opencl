@@ -217,8 +217,8 @@ int main(int argc, char** argv)
     // Generate reference output
     int kr, kc, row, col;
     DTYPE sum = 0;
-    for(row = 0; row < input_pgm.height-FILTER_SIZE+1; row++) {
-        for(col = 0; col < input_pgm.width-FILTER_SIZE+1; col++) {
+    for(row = 0; row < input_pgm.height; row++) {
+        for(col = 0; col < input_pgm.width; col++) {
             sum = 0;
             for(kr = 0; kr < FILTER_SIZE; kr++) {
                 for(kc = 0; kc < FILTER_SIZE; kc++ ) {
@@ -267,6 +267,7 @@ int main(int argc, char** argv)
 	destroyPGM(&output_pgm);
 
 	free(h_image);
+	free(h_image_padded);
 	free(h_output);
 	free(ref_output);
 	clReleaseMemObject(d_image);
