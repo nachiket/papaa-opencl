@@ -62,9 +62,10 @@ d_output = cl.Buffer(ctx, mf.WRITE_ONLY, h_image.nbytes)
 globalsize = (input_pgm.width, input_pgm.height)
 localsize = (input_pgm.width, input_pgm.height/NUM_WORK_GROUPS)
 local_buf_size = DTYPE(1).itemsize*localsize[0]*(localsize[1]+FILTER_SIZE-1)
+
 print("Launching the Kernel...")
-k_event = prg.conv_2d(queue, globalsize, localsize, d_image, d_filter, d_output,
-                      FILTER_SIZE, FILTER_SIZE, bias, cl.LocalMemory(local_buf_size))
+k_event = prg.conv_local(queue, globalsize, localsize, d_image, d_filter, d_output,
+                         FILTER_SIZE, FILTER_SIZE, bias, cl.LocalMemory(local_buf_size))
 k_event.wait()
 elapsed_time = k_event.profile.end - k_event.profile.start
 
