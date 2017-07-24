@@ -19,7 +19,7 @@ run:$(exec)
 	./$(exec) ../../../imgs/mnist_test_img_0.pgm
 
 pyrun:$(exec)
-	python host_app_gpu.py ../../../imgs/mnist_test_img_0.pgm
+	PYOPENCL_CTX=0 python host_app_gpu.py ../../../imgs/mnist_test_img_0.pgm
 
 print:
 	@echo "C_SRCS = $(C_SRCS)"

@@ -165,7 +165,7 @@ int main(int argc, char** argv)
 	d_image  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, PADDED_SIZE, h_image_padded, &err);
 
 	cl_ulong time_start, time_end;
-	double total_time;
+	double total_time = 0;
 
 	// Create the input and output arrays in device memory for our calculation
 	d_filter = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, mem_size_filter, h_filter, &err);
@@ -203,22 +203,27 @@ int main(int argc, char** argv)
 		exit(1);
 	}
 
-	/*Enqueue task for parallel execution*/
-	err = clEnqueueNDRangeKernel(commands, kernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &event);
-	if (err != CL_SUCCESS)
-	{
-		if(err == CL_INVALID_WORK_ITEM_SIZE)
-			printf("CL_INVALID_WORK_ITEM_SIZE \n");
-		if(err == CL_INVALID_WORK_GROUP_SIZE)
-			printf("CL_INVALID_WORK_GROUP_SIZE \n");
-		printf("Error: Failed to execute kernel! %d\n", err);
-		exit(1);
-	}
-	clWaitForEvents(1,&event);
+	uint trials = 1;
+	printf("Launching the kernel...\n");
+	for(uint j=0; j<trials; j++){
+		/*Enqueue task for parallel execution*/
+		err = clEnqueueNDRangeKernel(commands, kernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &event);
+		if (err != CL_SUCCESS)
+		{
+			if(err == CL_INVALID_WORK_ITEM_SIZE)
+				printf("CL_INVALID_WORK_ITEM_SIZE \n");
+			if(err == CL_INVALID_WORK_GROUP_SIZE)
+				printf("CL_INVALID_WORK_GROUP_SIZE \n");
+			printf("Error: Failed to execute kernel! %d\n", err);
+			exit(1);
+		}
+		clWaitForEvents(1,&event);
 
-	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
-	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
-	total_time  = (double)(time_end - time_start);
+		clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
+		clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
+		total_time  += (double)(time_end - time_start);
+	}
+	total_time /= trials;
 
 	// Retrieve result from device
 	err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_output, h_output, 0, NULL, NULL);

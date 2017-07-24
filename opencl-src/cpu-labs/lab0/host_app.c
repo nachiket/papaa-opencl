@@ -24,7 +24,7 @@ int main(int argc, char** argv)
 	cl_event event;
 	int err, i = 0;                            // error code returned from api calls
 	cl_ulong time_start, time_end;
-	double total_time;
+	double total_time = 0;
 
 	pgm_t input_pgm, output_pgm;
 
@@ -183,22 +183,27 @@ int main(int argc, char** argv)
 	localWorkSize[0] = 1;
 	localWorkSize[1] = 1;
 
-	/*Enqueue task for parallel execution*/
+	uint trials = 1;
 	printf("Launching the kernel...\n");
-	err = clEnqueueNDRangeKernel(commands, kernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &event);
-	if (err != CL_SUCCESS)
-	{
-		printf("Error: Failed to execute kernel! %d\n", err);
-		exit(1);
+	for(uint j=0; j<trials;j++){
+		/*Enqueue task for parallel execution*/
+		err = clEnqueueNDRangeKernel(commands, kernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &event);
+		if (err != CL_SUCCESS)
+		{
+			printf("Error: Failed to execute kernel! %d\n", err);
+			exit(1);
+		}
+
+		// Wait for the commands to finish
+		clWaitForEvents(1, &event);
+
+		// Get the profiling info
+		clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
+		clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
+		total_time  += (double)(time_end - time_start);
+
 	}
-
-	// Wait for the commands to finish
-	clWaitForEvents(1, &event);
-
-	// Get the profiling info
-	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
-	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
-	total_time  = (double)(time_end - time_start);
+	total_time /= trials;
 
 	// Retrieve result from device
 	printf("Reading output buffer into host memory...\n");

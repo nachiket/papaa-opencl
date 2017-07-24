@@ -60,12 +60,16 @@ d_output = cl.Buffer(ctx, mf.WRITE_ONLY, h_image.nbytes)
 
 globalsize = (input_pgm.width, input_pgm.height)
 localsize = (4, 4)
-
+elapsed_time = 0.
+trials = 1
+kern = prg.conv_2d
+kern.set_args(d_image, d_filter, d_output, FILTER_SIZE, bias)
 print("Launching the Kernel...")
-k_event = prg.conv_2d(queue, globalsize, localsize,
-                      d_image, d_filter, d_output, FILTER_SIZE, bias)
-k_event.wait()
-elapsed_time = k_event.profile.end - k_event.profile.start
+for i in range(trials):
+    k_event = cl.enqueue_nd_range_kernel(queue, kern, globalsize, localsize)
+    k_event.wait()
+    elapsed_time += k_event.profile.end - k_event.profile.start
+elapsed_time /= trials
 
 h_output = np.zeros_like(h_image, dtype=DTYPE)
 cl.enqueue_copy(queue, h_output, d_output)

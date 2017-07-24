@@ -13,6 +13,7 @@ if len(sys.argv) is not 2:
 
 
 # Setup Problem
+NUM_WORK_GROUPS = np.int32(4)
 FILTER_SIZE = np.int32(3)
 DTYPE = np.float32
 
@@ -59,17 +60,14 @@ d_filter = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, lap_filter.nbytes, la
 d_output = cl.Buffer(ctx, mf.WRITE_ONLY, h_image.nbytes)
 
 globalsize = (input_pgm.width, input_pgm.height)
-localsize = (1, 1)
-elapsed_time = 0.
-trials = 1
-kern = prg.conv_2d
-kern.set_args(d_image, d_filter, d_output, FILTER_SIZE, bias)
+localsize = (input_pgm.width, input_pgm.height/NUM_WORK_GROUPS)
+local_buf_size = DTYPE(1).itemsize*(localsize[0]+FILTER_SIZE-1)*(localsize[1]+FILTER_SIZE-1)
+
 print("Launching the Kernel...")
-for i in range(trials):
-    k_event = cl.enqueue_nd_range_kernel(queue, kern, globalsize, localsize)
-    k_event.wait()
-    elapsed_time += k_event.profile.end - k_event.profile.start
-elapsed_time /= trials
+k_event = prg.conv_local(queue, globalsize, localsize, d_image, d_filter, d_output,
+                         FILTER_SIZE, FILTER_SIZE, bias, cl.LocalMemory(local_buf_size))
+k_event.wait()
+elapsed_time = k_event.profile.end - k_event.profile.start
 
 h_output = np.zeros_like(h_image, dtype=DTYPE)
 cl.enqueue_copy(queue, h_output, d_output)

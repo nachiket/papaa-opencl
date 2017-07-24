@@ -20,7 +20,7 @@ run:$(exec)
 	./$(exec) ../../../imgs/mnist_test_img_0.pgm
 
 pyrun:$(exec)
-	python host_app.py ../../../imgs/mnist_test_img_0.pgm
+	PYOPENCL_CTX=2 python host_app.py ../../../imgs/mnist_test_img_0.pgm
 
 print:
 	@echo "C_SRCS = $(C_SRCS)"
